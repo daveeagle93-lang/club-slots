@@ -73,32 +73,37 @@ Run by the owner on their own Cloudflare account against a public scratch copy o
 
 ### 3.1 The claim window
 
-A new migration, `0019_setup_window.sql` (the next free number on `main`; see section 5 for the clash with the Access wizard):
+A new migration, `0019_auth_settings.sql` (the next free number on `main`; the Access wizard takes `0020`, section 5). It creates the **one shared settings row** for everything about first-run setup, recovery and the sign-in mode, on the `site_settings` pattern (`migrations/0009_site_settings.sql`: a singleton, `id = 1`, snake_case columns):
 
 ```sql
-CREATE TABLE setup_window (
-  id               INTEGER PRIMARY KEY CHECK (id = 1),
-  opened_at        TEXT NOT NULL,   -- ISO 8601, UTC
-  claim_token_hash TEXT             -- set by the claim (3.3); empty until then
+CREATE TABLE auth_settings (
+  id                  INTEGER PRIMARY KEY CHECK (id = 1),
+  -- sign-in mode (shared with the Access wizard, 3.8)
+  mode                TEXT NOT NULL DEFAULT 'password' CHECK (mode IN ('password', 'access')),
+  access_team_domain  TEXT,
+  access_aud          TEXT,
+  access_hostname     TEXT,
+  changed_at          TEXT,
+  changed_by          TEXT CHECK (changed_by IS NULL OR changed_by IN ('wizard', 'recovery', 'import', 'owner')),
+  -- first-run claim window and claim (3.1, 3.3)
+  setup_opened_at     TEXT NOT NULL,   -- ISO 8601, UTC
+  claim_token_hash    TEXT,            -- set by the claim; empty until then
+  -- recovery code (3.6)
+  recovery_hash       TEXT CHECK (recovery_hash IS NULL OR substr(recovery_hash, 1, 12) = 'hmac-sha256$'),
+  recovery_created_at TEXT,
+  CHECK (mode <> 'access' OR (access_team_domain IS NOT NULL AND access_aud IS NOT NULL AND access_hostname IS NOT NULL))
 );
-INSERT INTO setup_window (id, opened_at) VALUES (1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-
--- Written by the claim and by /recover (3.6); the migration inserts no row.
-CREATE TABLE recovery_code (
-  id         INTEGER PRIMARY KEY CHECK (id = 1),
-  code_hash  TEXT NOT NULL CHECK (substr(code_hash, 1, 12) = 'hmac-sha256$'),  -- same form as admin_credentials.secret_hash
-  created_at TEXT NOT NULL
-);
+INSERT INTO auth_settings (id, setup_opened_at) VALUES (1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
 ```
 
-`recovery_code` is a separate table, not a column of `admin_credentials`, because recovery and the manual recovery steps delete or replace the `admin_credentials` row, and the recovery code must outlive that.
+(An earlier draft had two tables, `setup_window` and `recovery_code`. They are columns of this row instead, so the whole first-run and sign-in state is one read, and the wizard extends one table. The recovery hash lives here and not in `admin_credentials` because recovery and the manual recovery steps replace or delete the `admin_credentials` row and the recovery code must outlive that.) The wizard's own columns (`access_app_id`, `access_policy_id`, `admin_emails`, `verify_nonce`, `verify_nonce_expires_at`, `verified_at`, `verified_config_hash`) are added by its migration `0020` with `ALTER TABLE ... ADD COLUMN`; `0019` already carries the columns and the `CHECK` the wizard's design asks for.
 
 - On a **fresh Deploy button run** the migrations run in the build, so `opened_at` is the moment the database is built, about a minute before the code goes live.
 - `N = 30` minutes lives in code (`CLAIM_WINDOW_MINUTES`). Expiry is computed on read (`now - opened_at`), so no scheduled job is needed. It is not a variable: another setting is another thing to explain, and the old `SETUP_CODE` path covers anyone who needs longer.
 - A later push to the repo redeploys but does not re-run `0019`, so a redeploy does **not** reopen the window.
 - **Existing v1.1 deployments** get the migration when they update. The window opens only for a site with no admin and no `SETUP_CODE`, which is a site that today answers 503 on every admin page. Under Access, with env credentials, or with an admin already signed in, `setupState` is `closed` and the window is irrelevant. Note this in "Upgrading".
 - **Reopening** with no `SETUP_CODE`: someone with the club's Cloudflare account runs one statement in the D1 console (documented in `handover.md`):
-  `UPDATE setup_window SET opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL;`
+  `UPDATE auth_settings SET setup_opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL;`
   Delete the `admin_credentials` row first if an admin had been made. This is the same trust level as the existing recovery steps.
 
 ### 3.2 States
@@ -145,11 +150,11 @@ C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker
 
 ### 3.6 Recovery code and `/recover` (added at approval)
 
-**Made with the secret.** The claim (3.3) and the code flow (state `open`) both generate, in one batch with the admin credentials, a recovery code of the same kind as the admin secret (32 random bytes, 43 characters, `generateAdminSecret`) and store only its hash (`hashAdminSecret`, the `hmac-sha256$<salt>$<mac>` form) in `recovery_code`. One screen shows both with a copy button each and a single "I've saved both" tick before "Go to sign in". Both flows use one shared function, so the screen is the same. A re-shown claim (the claim cookie, 3.3) replaces both, as it replaces the secret now. The pair is written in one batch, ordered so a lost race leaves no orphan row; the plan must specify the ordering, and a test must show concurrent claims leave exactly one matching pair.
+**Made with the secret.** The claim (3.3) and the code flow (state `open`) both generate, in one batch with the admin credentials, a recovery code of the same kind as the admin secret (32 random bytes, 43 characters, `generateAdminSecret`) and store only its hash (`hashAdminSecret`, the `hmac-sha256$<salt>$<mac>` form) in `auth_settings.recovery_hash`. One screen shows both with a copy button each and a single "I've saved both" tick before "Go to sign in". Both flows use one shared function, so the screen is the same. A re-shown claim (the claim cookie, 3.3) replaces both, as it replaces the secret now. The pair is written in one batch, ordered so a lost race leaves no orphan row; the plan must specify the ordering, and a test must show concurrent claims leave exactly one matching pair.
 
 **Use.** `GET /recover` serves a page (`public/recover.html`, `recover.js`) with one field, "Recovery code". `POST /api/recover` (same-origin JSON), in order:
 
-1. 404 if no `recovery_code` row exists (nothing to recover with).
+1. 404 if `auth_settings.recovery_hash` is empty (nothing to recover with), or if `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set (the env override mode has no stored credentials to replace).
 2. Per-client attempt limit only, no global cap, as the wizard decided for recovery (`access-wizard.md` lines 171-184), because a global cap would let anyone block the owner from the one route meant for the worst day. The key is domain-separated from sign-in and setup, keyed with the stored session secret (`clientKey`, `src/server/auth/ratelimit.ts`). A 256-bit code makes guessing hopeless; the limit is there to bound cost and noise.
 3. Constant-time check against the stored hash.
 4. On a match, **one guarded batch**: replace the recovery code hash (compare-and-set on the old hash, so a second concurrent use of the same code fails), then replace `admin_credentials` with a new secret hash and a new session secret (which signs out every existing session). `first_login_at` is left as it is, so `/setup` stays closed. Under Access, the same step also does what the wizard's break-glass does (`access-wizard.md` lines 166-169): switch the mode back to the password and record `changed_by = 'recovery'`. The old secret is never reused.
@@ -159,15 +164,15 @@ C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker
 
 **Deployments that already have an admin and no recovery code** (every v1.0 and v1.1 site that has signed in): none exists until one is made. Proposed small addition, **needed only for the wizard**: `POST /api/admin/recovery-code`, a signed-in password-mode admin action (CSRF-protected like the other admin writes) that makes and shows a recovery code once, replacing any earlier one. It gets a button on the admin settings page. It is not in the first release unless the wizard ships with it.
 
-**Relation to `SETUP_CODE`.** Both can exist. `SETUP_CODE` keeps its v1.1 meaning (C3); the recovery code is the default for people who never chose one. The wizard's break-glass requirement is met by either: "`SETUP_CODE` set and 12+ characters, **or** a `recovery_code` row exists".
+**Relation to `SETUP_CODE`.** Both can exist. `SETUP_CODE` keeps its v1.1 meaning (C3); the recovery code is the default for people who never chose one. The wizard's break-glass requirement is met by either: "`SETUP_CODE` set and 12+ characters, **or** `auth_settings.recovery_hash` is set".
 
 ### 3.7 Three changes that followed from the probe (approved by the owner on 22 October 2026)
 
 **(a) `ADMIN_AUTH` leaves `wrangler.jsonc` and is defaulted in code.** The form shows every plain `vars` entry as an editable field (2.1), so `"vars": { "ADMIN_AUTH": "password" }` puts a technical-looking box in front of a non-technical organiser. Remove it, in the production block and in `env.preview`, and let the Worker treat a variable that is **not set at all** (`undefined`) as `"password"`.
 
-- Code: three places read it (`src/server/setup.ts:23`, `src/server/auth/index.ts:22` and `:27`, with the error text at `:39`). They go through one helper, for example `adminAuthMode(env)`, so the default is written once.
+- Code: three places read it (`src/server/setup.ts:23`, `src/server/auth/index.ts:22` and `:27`, with the error text at `:39`). They are replaced by the resolution rule in 3.8, which writes the default once and also puts the sign-in mode in D1.
 - **Only `undefined` defaults.** A misspelt or empty value (`Password`, `none`, ` access`, an empty string) still fails closed with the same 503, as `docs/admin-auth.md:8` promises. That sentence changes from "if `ADMIN_AUTH` is unset, misspelt … every admin page … fails" to "if it is **set** to anything but `access` or `password`".
-- **Cost, to be stated in the docs:** a site on Access whose `ADMIN_AUTH=access` line is lost (an upstream merge resolved the wrong way, a variable deleted in the dashboard) no longer fails closed. It falls back to the password sign-in, and an admin secret made before the switch still sits in D1 and is accepted (`docs/admin-auth.md:171`: "simply not used" only while Access is on). The result is a silent downgrade from one named identity per admin to one shared secret, by operator error, not by an outsider. Mitigations: the docs tell Access users to keep `ADMIN_AUTH` explicit in their own `wrangler.jsonc`; the Access wizard (section 5) moves the choice into D1, where it is not lost by a config edit; and the admin page can name the sign-in mode it is in. The decision to default was the owner's; this paragraph is the price.
+- **Cost, and how 3.8 removes it.** With only a code default, a site on Access whose `ADMIN_AUTH=access` line is lost would silently fall back to the password sign-in, and an admin secret made before the switch (still in D1, `docs/admin-auth.md:171`) would be accepted. 3.8 stores the mode in D1 and pins an env-configured Access site there the first time an admin signs in through it, so the lost line no longer changes anything. A site that has never had an admin sign in through Access is not pinned; for it the downgrade is still possible, and the docs say so.
 - **Existing deployments.** Anyone on Access has `ADMIN_AUTH=access` in their own copy of `wrangler.jsonc` (that is how `docs/deploying.md:172` told them to do it). Updating from the template then conflicts on the `vars` line; "Updating your copy" must say: keep your `vars`, nothing else changes. Everyone on password mode can delete the line or keep it; both work.
 - `configure` (`scripts/configure-core.ts`): `buildConfig` must create `vars` when a club's `account.local.json` supplies some, because the template no longer has any. I have not read that code, so how much of `src/test/configure.test.ts` changes is **unknown**; see section 7.
 - **Not verified:** that removing `vars` removes the field from the form. It follows from "plain vars are shown", but only the implemented branch's run can prove it (8.2, step 1).
@@ -175,6 +180,24 @@ C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker
 **(b) The window clock.** In the probe, the migrations ran from about 07:22:27 to 07:22:53 and the Worker was live at 07:23:09, **about 16 seconds after the migrations**; the whole deploy took 45 seconds. `0019` stamps `opened_at` while the migrations run, so the window starts about 16 to 40 seconds before the site answers. 30 minutes (C1) is ample for the deploy itself. The real risk to the window is **not finding the address** (next point), not the deploy.
 
 **(c) `/` is the entry point; the README says where the address is.** Nothing on the completion screen shows the address (2.1), so an organiser has to find it. The README and `docs/deploying.md` say, in this order: the address is at the end of the build log; or, in the Cloudflare dashboard, open **Workers & Pages**, then your Worker (named as you named the project); its page shows the `workers.dev` address (menu names **unverified**; check them on the next run). Open that address, not `/setup`: `/` redirects to the claim page (3.4) while the window is open. If the window has run out, the page says how to reopen it (3.5).
+
+### 3.8 Sign-in mode in D1, shared with the Access wizard (added 22 October 2026)
+
+The owner's requirement: the sign-in mode is stored in D1, and the env variable is only an override, so an Access site cannot silently fall back to the password sign-in if a config line is lost. This is the wizard's own model (`access-wizard.md` lines 13 and 53-66), brought forward into `0019` so the two designs share **one** table, `auth_settings`, and one resolution rule.
+
+| env `ADMIN_AUTH` | D1 `mode` | Result |
+|---|---|---|
+| `access` | any | Access, with `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` **from env**, exactly as today (fails closed if invalid). D1 is not read for the decision. |
+| unset, or `password` | `access` | Access, with the three values **from D1**. |
+| unset, or `password` | `password` | Password, as today (env credentials, else `admin_credentials`). |
+| anything else, including an empty string | any | 503 `not_configured`, as today. |
+
+- **Source chosen whole.** Values are never mixed field by field between env and D1.
+- **D1 beats env password credentials.** If `mode = 'access'`, leftover `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` secrets are not used. This changes the sentence in `docs/admin-auth.md:50` ("D1 is never read" in the override mode): D1 is now read for the mode, and only the mode.
+- **Pinning.** The first time an admin is authenticated through an env-configured Access (`ADMIN_AUTH=access`), the `GET /api/admin/session` handler copies the env values and the request's hostname into `auth_settings` (`mode = 'access'`, `changed_by = 'import'`), only if D1 does not already hold exactly those values. From then on a lost env line changes nothing. This does the job of the wizard's "Import" button automatically, and only after a real Access sign-in has reached the Worker, which is the wizard's own evidence that the settings work.
+- **Exit from Access.** Because "unset or `password`" defers to D1, editing `ADMIN_AUTH` back to `password` no longer leaves Access. The ways back are `/recover` (3.6, which sets `mode = 'password'` and `changed_by = 'recovery'`), the D1 statement `UPDATE auth_settings SET mode = 'password', changed_by = 'owner' WHERE id = 1;` in the handover, and later the wizard's "Switch back to password". If the env still says `access`, `/recover` says so and tells the owner to remove that line too, because env wins.
+- **Cost.** Admin requests in password or unset mode read `auth_settings` and `admin_credentials` in one `db.batch` (today one read). Env-Access requests read nothing, as today. Public pages are not touched: `/`'s claim check is cached per isolate for 60 seconds (the wizard states the same rule for its own redirect).
+- **The preview environment** has its own database, so its own row, and stays on its own settings.
 
 ## 4. Threat model
 
@@ -216,12 +239,12 @@ That file is **not on `main`**. It lives on the branch `docs/access-wizard-desig
 | Wizard assumption | Effect of this design | What to do |
 |---|---|---|
 | "`SETUP_CODE` is already a required Worker secret (the Deploy button prompts for it)" (line 164). | **No longer true** for new deployments. | Rewrite that sentence. |
-| "`SETUP_CODE` stays as break-glass, always on in v1" (line 16); D5: "always on whenever `SETUP_CODE` is set and valid" (line 29). | Still consistent, and this design keeps the same rule (C3). But most new deployments will have **no** `SETUP_CODE`, so break-glass will not exist for them. | **Resolved by the recovery code (C7, C8).** Break-glass is "`SETUP_CODE` set and 12+ characters, **or** a `recovery_code` row exists". The wizard **requires one of them before it lets the owner turn on Access**. A new deployment has a recovery code from its first screen. An older site with neither is sent to the signed-in "make a recovery code" action (3.6) first. No Worker secret has to be set, so the open question of whether the wizard's API token could set one no longer matters. |
+| "`SETUP_CODE` stays as break-glass, always on in v1" (line 16); D5: "always on whenever `SETUP_CODE` is set and valid" (line 29). | Still consistent, and this design keeps the same rule (C3). But most new deployments will have **no** `SETUP_CODE`, so break-glass will not exist for them. | **Resolved by the recovery code (C7, C8).** Break-glass is "`SETUP_CODE` set and 12+ characters, **or** `auth_settings.recovery_hash` is set". The wizard **requires one of them before it lets the owner turn on Access**. A new deployment has a recovery code from its first screen. An older site with neither is sent to the signed-in "make a recovery code" action (3.6) first. No Worker secret has to be set, so the open question of whether the wizard's API token could set one no longer matters. |
 | Recovery deletes the `admin_credentials` row so `/setup` issues a new secret (lines 166-167). | Under this design the same effect is available without `SETUP_CODE`: `/recover` with the recovery code replaces the secret and, under Access, switches back to the password (3.6, steps 4-5). The `SETUP_CODE` route (state `open`) is unchanged. | Wizard text: add `/recover` as the main route; `SETUP_CODE` becomes the alternative. The wizard's rate-limit rule (per client only, lines 171-184) is the one `/recover` uses. |
-| Last resort: a D1-console statement (lines 190, 285). | Still the final fallback, now for the day the recovery code is lost as well. | Add the `setup_window` reset from 3.1 to the handover text so the console route also reopens the claim. |
-| Migration `0019` (line 35). | **Number clash.** Both designs want `0019`. | Whichever ships first takes `0019`; the other becomes `0020`, and its test is `migration-0020.test.ts`. Zero-config is smaller and likely goes first, so I would renumber the wizard. |
+| Last resort: a D1-console statement (lines 190, 285). | Still the final fallback, now for the day the recovery code is lost as well. | Add the `auth_settings` reset from 3.1 to the handover text so the console route also reopens the claim. |
+| Migration `0019` (line 35) and the `auth_settings` table (lines 35-47). | **Decided: zero-config takes `0019` and creates `auth_settings` with the mode columns, their `CHECK`, `changed_at` and `changed_by`, plus the claim and recovery columns (3.1).** The wizard's migration becomes `0020` and only adds its own columns with `ALTER TABLE ... ADD COLUMN`. | Wizard text: say the table already exists and list only the columns `0020` adds; renumber its test to `migration-0020.test.ts`. |
 | "First-run `/setup` keeps its present limits, global cap included" (line 184). | Still true for the code flow; the claim flow has none. | One sentence. |
-| The wizard drops `vars.ADMIN_AUTH` from `wrangler.jsonc` too (line 13, 71) and treats "`password` or unset" alike when it resolves the mode (the table at line 55). | **Same change as 3.7 (a), so the two designs overlap.** Whichever ships first removes the `vars` line and the helper; the other must not do it again. The wizard's table is the richer rule (D1 `mode` decides when env is not `access`), so 3.7 (a)'s `adminAuthMode(env)` should be written to fit it. For a site configured through the wizard, a lost `ADMIN_AUTH` line no longer downgrades Access: D1 holds the mode. 3.7 (a)'s downgrade note then applies only to hand-configured Access sites. | Decide at planning which design lands first. If zero-config does, it ships the unset-means-password default and the wizard replaces it with its table. |
+| The wizard drops `vars.ADMIN_AUTH` from `wrangler.jsonc` too (line 13, 71), resolves the mode from env plus D1 (the table at line 55), and has an "Import" button for env-Access sites. | **Decided: the two designs share one model, and zero-config ships it first (3.8).** Zero-config removes the `vars` line, creates `auth_settings`, implements the table at line 55, and pins env-Access sites automatically after a verified sign-in (so the Import button is not needed for them). | Wizard text: say the resolution rule and the table already exist; keep its Import button only if it still has a use (an env-Access site that nobody has signed in to yet). |
 | The wizard's `/setup` "Recover sign-in" form under Access mode (line 166). | Independent of the claim window: under Access the state is `closed`. | None; keep in mind the page serves both. |
 
 ## 6. Options considered
@@ -246,7 +269,7 @@ Produced by a search of the repo (`grep -rn` for `SETUP_CODE`, `/setup`, "setup 
 | `docs/deploying.md` | "Before you start" (l.30, delete the code paragraph); step 4 prompts (l.40); step 7 (l.44-56); "Check that it works" (l.65); CLI step 6 and 7 (l.147-155) and local dev (l.157, 192); troubleshooting sections `/setup says "Setup isn't ready"` (l.235), `"Admin sign-in isn't set up"` (l.244), `already been completed` (l.256), `"That setup code isn't right."` (l.260), local `/setup` 404s (l.297); "Upgrading" (add what the window means for an existing site; add a "Upgrading from v1.1"). |
 | `docs/admin-auth.md` | Settings table row for `SETUP_CODE` (l.25: "yes" becomes "no"); "First-run setup" section (l.35-53), a full rewrite; the "closed" and "replaces" rules; `/setup` under Access (l.51) unchanged; the rate-limit and 503 wording. |
 | `docs/admin-guide.md` (l.31-42) | The "first time" steps for a non-technical admin, now without a code. |
-| `docs/handover.md` | The secrets table (l.26-27), Step B (l.52-54), "If the admin secret is lost" (l.110-138, especially steps 2-4), the tables of what lives where (l.239-247). Lead the recovery section with `/recover`; add the `setup_window` reset; list `recovery_code` in the tables of what lives where; add "keep the recovery code" to "What the club must keep safe" (l.18-29). |
+| `docs/handover.md` | The secrets table (l.26-27), Step B (l.52-54), "If the admin secret is lost" (l.110-138, especially steps 2-4), the tables of what lives where (l.239-247). Lead the recovery section with `/recover`; add the `auth_settings` reset and the Access exit statement (3.8); list `auth_settings` in the tables of what lives where; add "keep the recovery code" to "What the club must keep safe" (l.18-29). |
 | `docs/development.md` (l.21, 29-31) | `.dev.vars` no longer needs a code; say the local database also gets a 30-minute window, then needs a code, and where the local reset is. |
 | `docs/configuration.md` (l.3) | A pointer sentence only. |
 | `docs/sign-in.md` (l.5) | Describe the default without "the setup code". |
@@ -257,14 +280,14 @@ Produced by a search of the repo (`grep -rn` for `SETUP_CODE`, `/setup`, "setup 
 | `docs/admin-auth.md` (l.8, 22, 31, 85, 171) | Fail-closed wording for `ADMIN_AUTH` (3.7 (a)); settings table (l.22: "`wrangler.jsonc` sets `password`" becomes "unset means `password`"); l.31 (plain variables and deploys); l.85; the Access downgrade note. |
 | `docs/deploying.md` (l.52, 124, 172) | `wrangler.jsonc` no longer sets `ADMIN_AUTH`; the Access steps say to **add** it, and "Updating your copy" says to keep it. |
 | `docs/configuration.md` (l.3, 30, 43-44), `docs/sign-in.md` (l.5), `docs/handover.md` (l.187), `.dev.vars.example` (l.14-15) | Same wording change: nothing sets `ADMIN_AUTH` for a password site any more. |
-| `src/server/auth/index.ts`, `src/server/setup.ts` | One `adminAuthMode(env)` helper (3.7 (a)); `src/server/env.ts` unchanged. |
+| `src/server/auth/index.ts`, `src/server/setup.ts`, new `src/server/auth/settings.ts` | The resolution rule and the D1 settings row (3.8); `src/server/env.ts` unchanged. |
 | `.dev.vars.example` | Comment `SETUP_CODE=` out, reword it ("optional: recovery and strict setup"), keep every other comment line. |
 | `package.json` `cloudflare.bindings.SETUP_CODE` (l.40-42) | Remove, if the live line goes (the test requires it). |
 | `docs/design/access-wizard.md` | On its own branch, per section 5. |
 
 **Code**
 
-`src/server/setup.ts` (new states, window check, `now` injected for tests); `src/routes/api/setup.ts` (claim branch, cookie); `src/server/auth/credentials.ts` (an atomic claim function); `src/worker/guards.ts:53`; `src/worker/static.ts:14` and `:43-50`; `public/setup.html` and `public/setup.js` (claim page, "already set up" page); `migrations/0019_setup_window.sql`; and `scripts/configure-core.ts:48` (the `SECRET_VARS` set keeps `SETUP_CODE`, which is still a secret).
+`src/server/setup.ts` (new states, window check, `now` injected for tests); `src/routes/api/setup.ts` (claim branch, cookie); `src/server/auth/credentials.ts` (an atomic claim function); `src/worker/guards.ts:53`; `src/worker/static.ts:14` and `:43-50`; `public/setup.html` and `public/setup.js` (claim page, "already set up" page); `migrations/0019_auth_settings.sql`; and `scripts/configure-core.ts:48` (the `SECRET_VARS` set keeps `SETUP_CODE`, which is still a secret).
 
 **Tests**
 
@@ -280,10 +303,9 @@ Produced by a search of the repo (`grep -rn` for `SETUP_CODE`, `/setup`, "setup 
 | `src/worker/worker.test.ts` (`:532-690`) | `/setup` 503 text no longer says only `SETUP_CODE`; `/` redirect in `claim` only; HEAD, 405s, `no-store`. |
 | `src/worker/routes.test.ts` (`:11, :47, :76`), `src/test/wrangler-config.test.ts` (`:39`) | **Change** (this was "no change" before the recovery code): `/recover` and `POST /api/recover` are new routes, and `run_worker_first` gains `"/recover"`. The claim itself reuses `/setup` and `POST /api/setup`. |
 | New: `src/routes/api/recover.test.ts`, `public/recover.test.ts`, `src/server/recovery.test.ts` | `/recover`: 404 with no code row; wrong code 401; per-client limit and **no** global cap; a right code replaces the secret and the session secret, makes a new code, and the old code then fails; two concurrent uses of one code, exactly one wins; works after the window, under Access (mode switched back, `changed_by = 'recovery'`) and in password mode; the secret and the code never reach `console.*` or a D1 write unhashed. Shared "save these now" page markup and the single tick. |
-| `src/test/migration-0019.test.ts` | Also covers `recovery_code`: one row at most, `id = 1`, the hash prefix check, empty after a fresh migrate. |
+| `src/test/migration-0019.test.ts` | Covers `auth_settings`: one row at most, `id = 1`, the `mode` and `changed_by` checks, the `access` row refused unless team domain, AUD and hostname are set, the recovery hash prefix check, `setup_opened_at` a valid ISO time, the row present after a fresh migrate. |
 | `docs/design/access-wizard.md` (other branch) | Its break-glass requirement test is "`SETUP_CODE` valid **or** a recovery row exists". |
 | New code | `src/server/recovery.ts`, `src/routes/api/recover.ts`, `public/recover.html`, `public/recover.js`, a `recoveryClientKey` next to `clientKey`, and a shared "save these now" renderer used by `public/setup.js` and `public/recover.js`; later, `POST /api/admin/recovery-code` and its settings button. |
-| `src/test/migration-0019.test.ts` (new) | Follows `migration-0013.test.ts`: one row, `id = 1`, `opened_at` is a valid ISO time, the row exists after a fresh migrate. |
 | `src/server/auth/test-harness.ts`, `src/server/auth/credentials.test.ts`, `src/server/auth/index.test.ts` | Add a no-`SETUP_CODE` environment helper; atomic claim races; `awaitingSetup` unchanged. |
 | `src/server/auth/ratelimit.test.ts` (`:213`), `src/test/configure.test.ts` (`:119, :137`) | Should not change (the code flow and secret refusal stay). Re-run to confirm. |
 | `src/routes/api/admin/login.test.ts` (`:256-284`), `src/test/migration-0013.test.ts`, `src/test/global-setup.ts` | Should not change. `global-setup.ts` applies the real migrations, so `0019` is exercised implicitly. |
@@ -339,6 +361,7 @@ Clean-up of anything created is part of each run: the source repo, the copy repo
 6. **No "Admin secret created at <time>" line** on the first admin page. Approved as left out.
 7. **Recovery code and `/recover`** (C7, C8), added by the owner at approval: section 3.6. Whether the signed-in "make a recovery code" action (for existing sites) ships in the first release or with the wizard is **left to the plan**; it is needed only by the wizard.
 8. **P1 passed: implement as designed** (22 October 2026), with the three changes in 3.7: `ADMIN_AUTH` out of `wrangler.jsonc` and defaulted in code (only when unset), the window clock left at 30 minutes, and `/` plus README guidance for finding the address.
+9. **Shared settings model** (22 October 2026, requested with the plan): the sign-in mode lives in D1 with env as an override (3.8); `auth_settings` also holds the claim window and recovery hash; `0019` creates it, the wizard's `0020` extends it.
 
 ## 10. What I did not verify
 
