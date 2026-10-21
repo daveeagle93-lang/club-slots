@@ -1,0 +1,303 @@
+# Zero-config setup: a first-run claim window instead of `SETUP_CODE`
+
+Status: **approved 21 October 2026, including the recovery code added in section 3.6 (C7, C8). No code written yet; the Deploy button probe (section 8) comes first.** Written 21 October 2026 against `main` = `v1.1` (commit `f71189f`, migrations `0001` to `0018`).
+
+Goal: a non-technical organiser presses the Deploy button, accepts every default, deploys, opens their site and saves a password. The password sign-in stays the default. Cloudflare Access stays optional.
+
+## 1. Summary of the proposal
+
+| | Today (v1.1) | Proposed |
+|---|---|---|
+| Deploy form | Asks for `SETUP_CODE` (12+ characters). | Asks for nothing but the Git account, names and the database. **No secret prompt.** |
+| First run | Find the `workers.dev` address, open `/setup`, type the code, save the secret. | Open the site. `/` and `/admin` send you to `/setup`. Press one button, save the secret. |
+| Who may make the first secret | Whoever knows the code. | The first visitor to press the button, **within 30 minutes of the database being created**, while no admin exists. |
+| `SETUP_CODE` | Required. | **Optional.** If set, setup works exactly as in v1.1 (code required, no claim window). It is also the way to reopen setup after the window expires. |
+| Closes | At the first successful sign-in. | At the first successful sign-in, or when the window expires with nothing claimed. |
+
+Decisions I made, for you to check (details in the sections below):
+
+| # | Call | Why | Section |
+|---|---|---|---|
+| C1 | Window **N = 30 minutes**, a constant in code, not a setting. | Covers a slow deploy plus a distracted organiser; short enough that a stranger has little time. | 3.1 |
+| C2 | The window starts when **migration `0019` runs**, not at the first request. | Nothing an outsider does can start or extend it. | 3.1 |
+| C3 | If `SETUP_CODE` is set, the claim window is **off** and v1.1 behaviour applies unchanged. | Gives anyone who wants the strict behaviour a way to keep it, and leaves every existing deployment as it is. | 3.2 |
+| C4 | A claim is **one-shot**: a second visitor cannot replace it. The claimer's browser keeps a claim cookie, so a reload or a closed tab can show a new secret. | Stops an attacker overwriting the owner's secret between "saved" and "first sign-in". | 3.3 |
+| C5 | A claim needs an explicit **POST** from a button. Visiting `/setup`, `/` or `/admin` never claims. | Crawlers, link previews and Cloudflare's own checks must not claim the site. | 3.3 |
+| C6 | `.dev.vars.example` keeps `SETUP_CODE` as a **commented-out** line. | Keeps the documentation for developers; unverified whether the button prompts for commented lines (section 2). | 2, 4 |
+| C7 | The "save these now" screen shows an admin secret **and a recovery code** (requested by the owner). The code is stored hashed. A `/recover` page uses it to reset the admin secret without the D1 console. | New deployments have no `SETUP_CODE`, so without this a non-technical admin has no way back in. | 3.6 |
+| C8 | `/recover` works **in any sign-in mode**, including Access, and counts as the Access wizard's break-glass. The code is single-use: using it makes a new one. | The wizard needs a recovery route that does not depend on a Worker secret. | 3.6, 5 |
+
+Open questions that need your answer are in section 9.
+
+## 2. What Cloudflare's Deploy button docs say (checked 21 October 2026)
+
+Method: a research agent read the official pages, and I re-fetched the main page myself. WebFetch summarises pages through a small model, so quotes below are what it returned, not a transcript. Re-read the pages before quoting them publicly.
+
+| Question | Finding | Status | Source |
+|---|---|---|---|
+| Do `.dev.vars.example` / `.env.example` drive the form? | Secrets "can be defined in a `.dev.vars.example` or `.env.example` file", in dotenv format. The changelog says the values "appear in the dashboard so users can configure them". | **Verified** | [Deploy buttons](https://developers.cloudflare.com/workers/platform/deploy-buttons/) (header "Last updated Oct 12, 2026"); [changelog, July 2025](https://developers.cloudflare.com/changelog/post/2025-07-01-workers-deploy-button-supports-environment-variables-and-secrets/) |
+| Where do the descriptions come from? | `package.json` under `cloudflare.bindings.<NAME>.description`, with inline Markdown. Not from comments in the example file. | **Verified** | Deploy buttons page |
+| Are example values prefilled? | The docs say the repo should include default values for **resource** names and IDs. For secrets, only one third-party post says each entry is shown with its example value prefilled. | **Unverified** (official). Third party: [dev.to post](https://dev.to/ddyy/my-deploy-to-cloudflare-button-disabled-auth-2p67) | |
+| Are commented-out lines ignored? | The official docs never say. The same post says the button "prompts for every UNCOMMENTED entry". | **Unverified** (official) | dev.to post |
+| Can a secret be optional or left empty? | The docs have no word about optional secrets. The post says "there's no way to mark one optional" and that a blank entry is still prompted. Whether an empty field **blocks** the deploy is not stated anywhere I found. | **Unverified** | dev.to post |
+| Can the platform generate a secret? | Nothing found. The docs' own example tells the user to run `openssl rand -hex 32` themselves. | **No evidence it exists** | Deploy buttons page |
+| `secrets.required` in the Wrangler config? | Real, but unrelated to the button. It makes `wrangler deploy` **fail** if a listed secret is missing, so **we must not add it** for any optional secret. How the button treats it is untested. | Config key **verified**; button behaviour **unverified** | [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/); [Secrets](https://developers.cloudflare.com/workers/configuration/secrets/); [changelog, March 2026](https://developers.cloudflare.com/changelog/post/2026-03-24-secrets-config-property/) |
+| Does the button run migrations? | Not by itself. Run them inside the `deploy` script. The docs example is `wrangler d1 migrations apply DB_BINDING --remote` chained before `wrangler deploy`. Our `deploy` script already does this (`package.json:15`). | **Verified** | Deploy buttons page |
+| Which command runs? | "If no `deploy` script is specified, Cloudflare will preconfigure `npx wrangler deploy`", and the fields are "detected and pre-populated". Whether the form runs `npm run deploy` exactly is not stated. We have one end-to-end run (6 October 2026, v1.0 era) that says it did. | Partly **verified** | Deploy buttons page; `README.md` ("Work in progress") |
+| Does the user learn their URL afterwards? | The docs never mention `workers.dev` or a post-deploy page for the button. | **Unverified** | Deploy buttons page |
+| Does removing the only prompted secret break the button? | No source says the button needs at least one secret. A template with no `.dev.vars.example` at all is the normal case for Workers templates. | **Unverified**, probably fine | |
+
+**What this means for the design.**
+
+1. Nothing in the docs lets us auto-generate a secret at deploy time. A first-run flow on the site itself is the only route to "no typing in the form". The proposal does not depend on any undocumented button behaviour **if** the button copes with a repo that has no live line in `.dev.vars.example`. That is the single thing to prove on a real run (section 8).
+2. If the button turns out to dislike zero entries, the fallback is one honest field, see option B in section 6.
+3. The `SETUP_CODE` description in `package.json` has to go with its live line: `src/test/deploy-button.test.ts:96` demands a description for every live key, and `:100` fails if a description exists for a key that is not live.
+
+## 3. The proposal
+
+### 3.1 The claim window
+
+A new migration, `0019_setup_window.sql` (the next free number on `main`; see section 5 for the clash with the Access wizard):
+
+```sql
+CREATE TABLE setup_window (
+  id               INTEGER PRIMARY KEY CHECK (id = 1),
+  opened_at        TEXT NOT NULL,   -- ISO 8601, UTC
+  claim_token_hash TEXT             -- set by the claim (3.3); empty until then
+);
+INSERT INTO setup_window (id, opened_at) VALUES (1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+
+-- Written by the claim and by /recover (3.6); the migration inserts no row.
+CREATE TABLE recovery_code (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  code_hash  TEXT NOT NULL CHECK (substr(code_hash, 1, 12) = 'hmac-sha256$'),  -- same form as admin_credentials.secret_hash
+  created_at TEXT NOT NULL
+);
+```
+
+`recovery_code` is a separate table, not a column of `admin_credentials`, because recovery and the manual recovery steps delete or replace the `admin_credentials` row, and the recovery code must outlive that.
+
+- On a **fresh Deploy button run** the migrations run in the build, so `opened_at` is the moment the database is built, about a minute before the code goes live.
+- `N = 30` minutes lives in code (`CLAIM_WINDOW_MINUTES`). Expiry is computed on read (`now - opened_at`), so no scheduled job is needed. It is not a variable: another setting is another thing to explain, and the old `SETUP_CODE` path covers anyone who needs longer.
+- A later push to the repo redeploys but does not re-run `0019`, so a redeploy does **not** reopen the window.
+- **Existing v1.1 deployments** get the migration when they update. The window opens only for a site with no admin and no `SETUP_CODE`, which is a site that today answers 503 on every admin page. Under Access, with env credentials, or with an admin already signed in, `setupState` is `closed` and the window is irrelevant. Note this in "Upgrading".
+- **Reopening** with no `SETUP_CODE`: someone with the club's Cloudflare account runs one statement in the D1 console (documented in `handover.md`):
+  `UPDATE setup_window SET opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL;`
+  Delete the `admin_credentials` row first if an admin had been made. This is the same trust level as the existing recovery steps.
+
+### 3.2 States
+
+`setupState` (`src/server/setup.ts:22`) today returns `closed | not_ready | open`. It gains two states. Decision order:
+
+| Condition (checked in this order) | State | `/setup` | `POST /api/setup` | `/admin*` when signed out |
+|---|---|---|---|---|
+| Not the password provider, or env credentials set, or `first_login_at` set | `closed` | 404 | 404 | as today |
+| `SETUP_CODE` set and 12+ characters | `open` (v1.1, unchanged) | page asks for the code | code flow, unchanged | 302 to `/setup` |
+| `SETUP_CODE` set but too short | `not_ready` | 503, as today | 503 | 503 |
+| No `SETUP_CODE`, no `admin_credentials` row, within the window | **`claim`** | page with one button | claim (3.3) | 302 to `/setup`; `/` too (3.4) |
+| No `SETUP_CODE`, a row exists, `first_login_at` empty | **`claimed`** | with the claim cookie: page offers a new secret. Without it: "This site has already been set up. Sign in." | with the cookie: replace the secret. Without: 403 | `/admin/login` |
+| No `SETUP_CODE`, no row, window expired | `not_ready` | 503 with new wording (3.5) | 503 | 503 |
+
+C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker secret away and every existing deployment is untouched. The cost is that "code **and** window" is not offered; that would mean explaining two ways in.
+
+### 3.3 The claim
+
+- `GET /setup` in state `claim` serves a page that says what is about to happen and has one button, "Create my admin secret". **Nothing is created by a GET** (C5). `GET /` and `GET /admin` only redirect.
+- The button sends `POST /api/setup` with an empty body. The handler, in order: state is `claim`; same-origin (`hasSameOrigin`); then one atomic statement:
+
+  ```sql
+  INSERT INTO admin_credentials (id, secret_hash, session_secret, created_at)
+  SELECT 1, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM admin_credentials)
+  RETURNING id
+  ```
+
+  together with setting `claim_token_hash` in the same `db.batch`. If it returns no row, someone else won the race: answer 409 "already set up". Today's two concurrent setups both succeed and the last write wins (`src/server/auth/credentials.ts:25-31`, no test for it), so this is stricter than v1.1 on purpose.
+- The response returns the secret **and a recovery code (3.6)** once, exactly as now, and sets a cookie `__Host-sb_claim` (random 256-bit token, `HttpOnly; Secure; SameSite=Strict; Path=/`, same attributes as `__Host-sb_admin`). Only the token's hash is stored.
+- State `claimed` with a matching cookie lets the same browser ask for a replacement secret (a closed tab, a reload, a lost clipboard). Without it, nobody can replace the claim without `SETUP_CODE` or the D1 console. This is C4. The price: if an attacker claims first, the owner is locked out and must use the recovery routes.
+- Sign-in with the claimed secret works at any time, **even after the window expires**. The window limits only the creation of a first secret. The first successful sign-in sets `first_login_at`, which is `closed`, as now.
+- No per-client or global attempt limit on the claim: there is no code to guess. The cap on `POST /api/setup` for the code flow is unchanged. (Note `setupClientKey` is keyed by `SETUP_CODE`, `src/server/auth/ratelimit.ts:75-77`, so it cannot be used when none is set; it does not need to be.)
+
+### 3.4 Redirects
+
+- `/admin` and `/admin/*` pages: extend the existing branch in `src/worker/guards.ts:53` (`awaitingSetup && state === "open"`) to `open | claim`. This stays authoritative: it reads D1 every time (via `adminAuthFor`, `src/server/auth/index.ts:33`).
+- `/`: in `serveLandingPage` (`src/worker/static.ts:14`), for `GET`/`HEAD` of the exact path `/`, state `claim` gives `302 /setup` with `Cache-Control: no-store`. `/e/*`, `/api/*` and everything else are untouched, so a link already shared still works. `/` already reads D1 for the page tags (`serveWithTags` takes `env.DB`), so I expect to fold the check into that read; **I have not verified the statement count**, and `src/test/statement-counts.test.ts` should be checked. A per-isolate memo of "no longer claimable" is a fallback; it is safe because it only affects this convenience redirect, never `/admin`.
+
+### 3.5 Wording
+
+- Expired with nothing claimed: "Setup is closed. The first-run window ended, so nobody can create an admin secret from the web any more. To reopen it, set `SETUP_CODE` as a Worker secret (any phrase of 12+ characters) and reload, or see [handover](../handover.md)." (This replaces the text at `src/worker/static.ts:46`, which today names only `SETUP_CODE`.)
+- Claim page, in plain words: "This site has no admin yet. Press the button to make your admin secret and a recovery code. Both are shown once. Save both in a password manager before you leave this page."
+
+### 3.6 Recovery code and `/recover` (added at approval)
+
+**Made with the secret.** The claim (3.3) and the code flow (state `open`) both generate, in one batch with the admin credentials, a recovery code of the same kind as the admin secret (32 random bytes, 43 characters, `generateAdminSecret`) and store only its hash (`hashAdminSecret`, the `hmac-sha256$<salt>$<mac>` form) in `recovery_code`. One screen shows both with a copy button each and a single "I've saved both" tick before "Go to sign in". Both flows use one shared function, so the screen is the same. A re-shown claim (the claim cookie, 3.3) replaces both, as it replaces the secret now. The pair is written in one batch, ordered so a lost race leaves no orphan row; the plan must specify the ordering, and a test must show concurrent claims leave exactly one matching pair.
+
+**Use.** `GET /recover` serves a page (`public/recover.html`, `recover.js`) with one field, "Recovery code". `POST /api/recover` (same-origin JSON), in order:
+
+1. 404 if no `recovery_code` row exists (nothing to recover with).
+2. Per-client attempt limit only, no global cap, as the wizard decided for recovery (`access-wizard.md` lines 171-184), because a global cap would let anyone block the owner from the one route meant for the worst day. The key is domain-separated from sign-in and setup, keyed with the stored session secret (`clientKey`, `src/server/auth/ratelimit.ts`). A 256-bit code makes guessing hopeless; the limit is there to bound cost and noise.
+3. Constant-time check against the stored hash.
+4. On a match, **one guarded batch**: replace the recovery code hash (compare-and-set on the old hash, so a second concurrent use of the same code fails), then replace `admin_credentials` with a new secret hash and a new session secret (which signs out every existing session). `first_login_at` is left as it is, so `/setup` stays closed. Under Access, the same step also does what the wizard's break-glass does (`access-wizard.md` lines 166-169): switch the mode back to the password and record `changed_by = 'recovery'`. The old secret is never reused.
+5. The response returns the **new admin secret and a new recovery code**, once, on the same "save these now" screen. The old recovery code no longer works.
+
+**Reach.** `/recover` is a new path, so `run_worker_first` in `wrangler.jsonc` gains `"/recover"` (and `/api/recover` is already covered by `/api/*`); `src/test/wrangler-config.test.ts:39` pins that list and changes. It is served on both `workers.dev` and the custom domain, and passes through Access's four admin paths untouched (as `/setup` does in the wizard design, line 202). The claim window plays no part: a recovery code works at any time.
+
+**Deployments that already have an admin and no recovery code** (every v1.0 and v1.1 site that has signed in): none exists until one is made. Proposed small addition, **needed only for the wizard**: `POST /api/admin/recovery-code`, a signed-in password-mode admin action (CSRF-protected like the other admin writes) that makes and shows a recovery code once, replacing any earlier one. It gets a button on the admin settings page. It is not in the first release unless the wizard ships with it.
+
+**Relation to `SETUP_CODE`.** Both can exist. `SETUP_CODE` keeps its v1.1 meaning (C3); the recovery code is the default for people who never chose one. The wizard's break-glass requirement is met by either: "`SETUP_CODE` set and 12+ characters, **or** a `recovery_code` row exists".
+
+## 4. Threat model
+
+**What is being protected.** The first admin secret of a brand-new, empty site. An attacker who claims it controls the club's admin pages: events, bookings and, from then on, the booker details entered later.
+
+**The attack.** Between database creation and the owner's first visit, anyone who can guess the `workers.dev` address presses the button first.
+
+| Fact | Basis |
+|---|---|
+| The address is `<worker-name>.<account-subdomain>.workers.dev`. | `docs/deploying.md` ("Deploy with the button", step 4). |
+| The Worker name is almost always the suggested default (`slot-booker`), so the attacker must find the **account subdomain**. | The form suggests the name; the README says "The suggested name is fine". |
+| Whether the account subdomain can be enumerated (guessing, DNS data, Certificate Transparency, scanners) is **unverified**. | I did not research this. Treat the address as guessable by a motivated attacker and as not listed anywhere obvious. |
+| The window is at most 30 minutes, and the site has no data in it. | Design. |
+
+**Impact if it happens.** Medium, bounded. No booker data exists yet. The attacker can sign in and the owner is locked out. The owner finds out quickly: their own visit shows "already set up" instead of the claim page. They then recover with `SETUP_CODE`, the D1 console, or by deleting the Worker and deploying again with a different Worker name (a few minutes, no data lost).
+
+**Mitigations, in the order they matter**
+
+1. **Short, fixed window, started by the migration (C1, C2).** An outsider can neither start nor extend it. A redeploy does not reopen it.
+2. **One-shot claim with an atomic gate (C4).** Exactly one winner. A second visitor cannot overwrite the owner's saved-but-not-yet-used secret, which is the nastiest variant (a silent swap). It fails loudly instead.
+3. **Claim by POST only, same-origin (C5).** Crawlers, link unfurlers and uptime checks that `GET /` cannot claim the site.
+4. **Claim cookie.** Only the browser that claimed can ask for a replacement.
+5. **Opt-out.** Set `SETUP_CODE` before the first visit and the window is off (C3). Anyone worried about the risk keeps v1.1's behaviour. The README says how, in one line.
+6. **Visibility.** The owner sees a failure at once. I propose to also show the claim time on the first admin page ("Admin secret created on <time>") so an attacker's early claim shows even to an owner who signs in with a stolen-then-reused secret. That needs a column; **not in this design, offered as a possible extra.**
+7. **No leakage in the redirect.** Only `/` (GET/HEAD) and the admin pages redirect, `no-store`. The public API and event pages are untouched.
+
+**What this does not fix.** An attacker who is already watching the account's `workers.dev` address and reacts within the window still wins a race the owner is not aware of. That is the price of "no code to type". Mitigation 5 exists for them.
+
+**The recovery code is a second bearer credential (3.6).** Whoever holds it can reset the admin secret, which is as powerful as holding the secret, and it works at any time, with or without the window. It is stored only as a hash, shown once, and is single-use: using it makes a new one, so a code that has been used is worthless. The cost is the same as for the secret: if it leaks, the owner is locked out until they recover by other means, and because the attacker's use consumes the code, the owner's copy stops working too. The screen and the docs say to keep the two apart if the password manager allows. `/recover` is limited per client, never by a global cap, so nobody can block the owner from it; the code has 256 bits, so guessing is not the risk. A stolen recovery code is still a full takeover; it cannot be made safer without a second factor, which this design does not add.
+
+Also, `session_secret` is stored in plaintext in D1 (`migrations/0013:13`); it is pre-existing and unchanged here.
+
+**Why not weaker or stronger.** No window at all (claim open until first sign-in) is worse: a Worker left alone for days is a standing invitation. A longer window helps slow organisers and hurts everyone else. A code is the safest and is exactly what this removes.
+
+## 5. Interaction with `docs/design/access-wizard.md`
+
+That file is **not on `main`**. It lives on the branch `docs/access-wizard-design` (commit `791f358`, design only), so links to it from this branch would dangle; I read it with `git show` and cite its line numbers.
+
+| Wizard assumption | Effect of this design | What to do |
+|---|---|---|
+| "`SETUP_CODE` is already a required Worker secret (the Deploy button prompts for it)" (line 164). | **No longer true** for new deployments. | Rewrite that sentence. |
+| "`SETUP_CODE` stays as break-glass, always on in v1" (line 16); D5: "always on whenever `SETUP_CODE` is set and valid" (line 29). | Still consistent, and this design keeps the same rule (C3). But most new deployments will have **no** `SETUP_CODE`, so break-glass will not exist for them. | **Resolved by the recovery code (C7, C8).** Break-glass is "`SETUP_CODE` set and 12+ characters, **or** a `recovery_code` row exists". The wizard **requires one of them before it lets the owner turn on Access**. A new deployment has a recovery code from its first screen. An older site with neither is sent to the signed-in "make a recovery code" action (3.6) first. No Worker secret has to be set, so the open question of whether the wizard's API token could set one no longer matters. |
+| Recovery deletes the `admin_credentials` row so `/setup` issues a new secret (lines 166-167). | Under this design the same effect is available without `SETUP_CODE`: `/recover` with the recovery code replaces the secret and, under Access, switches back to the password (3.6, steps 4-5). The `SETUP_CODE` route (state `open`) is unchanged. | Wizard text: add `/recover` as the main route; `SETUP_CODE` becomes the alternative. The wizard's rate-limit rule (per client only, lines 171-184) is the one `/recover` uses. |
+| Last resort: a D1-console statement (lines 190, 285). | Still the final fallback, now for the day the recovery code is lost as well. | Add the `setup_window` reset from 3.1 to the handover text so the console route also reopens the claim. |
+| Migration `0019` (line 35). | **Number clash.** Both designs want `0019`. | Whichever ships first takes `0019`; the other becomes `0020`, and its test is `migration-0020.test.ts`. Zero-config is smaller and likely goes first, so I would renumber the wizard. |
+| "First-run `/setup` keeps its present limits, global cap included" (line 184). | Still true for the code flow; the claim flow has none. | One sentence. |
+| The wizard's `/setup` "Recover sign-in" form under Access mode (line 166). | Independent of the claim window: under Access the state is `closed`. | None; keep in mind the page serves both. |
+
+## 6. Options considered
+
+- **A. Claim window (this proposal).** Zero typing. Costs a short race (section 4).
+- **B. One honest field: "Choose an admin password".** An `ADMIN_PASSWORD` secret typed in the form, hashed by the Worker at first use. Works with documented button behaviour only if the form lets you proceed, and still makes the organiser invent and remember something. Also a bigger code change (the override path takes a pre-hashed value). **Fallback if the button rejects an empty form.**
+- **C. Keep `SETUP_CODE`, add a placeholder default.** Weakest: a published default is a published password.
+- **D. `secrets.required` or platform-generated secrets.** Not documented for the button; `secrets.required` would fail the build when unset (section 2).
+- **E. Cloudflare Access by default.** Needs a custom domain and an Access app first, which is the barrier we are removing (`docs/admin-auth.md`).
+
+## 7. Every doc and test that would change
+
+Produced by a search of the repo (`grep -rn` for `SETUP_CODE`, `/setup`, "setup code", "first run" in `README.md`, `docs/`, `public/`, `src/`, `scripts/`, `package.json`, `.dev.vars.example`). Line numbers are from `main`. A final sweep with the same search is part of the implementation checklist.
+
+**Documentation**
+
+| File | What changes |
+|---|---|
+| `README.md` "What the form asks for" (l.16-31) | Remove item 4 and renumber. Add a line: "There is no password to choose here." |
+| `README.md` "First run: `/setup`" (l.33-45) | Rewrite: open your site, press the button, save the secret **and the recovery code**. Explain the 30 minutes, what "already set up" means, `/recover`, and `SETUP_CODE` as the opt-out and as the way to reopen. |
+| `README.md` l.92 "Work in progress" | Update the end-to-end run record after the new run. |
+| `docs/deploying.md` | "Before you start" (l.30, delete the code paragraph); step 4 prompts (l.40); step 7 (l.44-56); "Check that it works" (l.65); CLI step 6 and 7 (l.147-155) and local dev (l.157, 192); troubleshooting sections `/setup says "Setup isn't ready"` (l.235), `"Admin sign-in isn't set up"` (l.244), `already been completed` (l.256), `"That setup code isn't right."` (l.260), local `/setup` 404s (l.297); "Upgrading" (add what the window means for an existing site; add a "Upgrading from v1.1"). |
+| `docs/admin-auth.md` | Settings table row for `SETUP_CODE` (l.25: "yes" becomes "no"); "First-run setup" section (l.35-53), a full rewrite; the "closed" and "replaces" rules; `/setup` under Access (l.51) unchanged; the rate-limit and 503 wording. |
+| `docs/admin-guide.md` (l.31-42) | The "first time" steps for a non-technical admin, now without a code. |
+| `docs/handover.md` | The secrets table (l.26-27), Step B (l.52-54), "If the admin secret is lost" (l.110-138, especially steps 2-4), the tables of what lives where (l.239-247). Lead the recovery section with `/recover`; add the `setup_window` reset; list `recovery_code` in the tables of what lives where; add "keep the recovery code" to "What the club must keep safe" (l.18-29). |
+| `docs/development.md` (l.21, 29-31) | `.dev.vars` no longer needs a code; say the local database also gets a 30-minute window, then needs a code, and where the local reset is. |
+| `docs/configuration.md` (l.3) | A pointer sentence only. |
+| `docs/sign-in.md` (l.5) | Describe the default without "the setup code". |
+| `docs/known-limits.md` (l.12) | The rate-limit sentence; add a "claim race" limit. |
+| `docs/costs.md` | Only if the `/` check adds a D1 read (3.4). |
+| `.dev.vars.example` | Comment `SETUP_CODE=` out, reword it ("optional: recovery and strict setup"), keep every other comment line. |
+| `package.json` `cloudflare.bindings.SETUP_CODE` (l.40-42) | Remove, if the live line goes (the test requires it). |
+| `docs/design/access-wizard.md` | On its own branch, per section 5. |
+
+**Code**
+
+`src/server/setup.ts` (new states, window check, `now` injected for tests); `src/routes/api/setup.ts` (claim branch, cookie); `src/server/auth/credentials.ts` (an atomic claim function); `src/worker/guards.ts:53`; `src/worker/static.ts:14` and `:43-50`; `public/setup.html` and `public/setup.js` (claim page, "already set up" page); `migrations/0019_setup_window.sql`; and `scripts/configure-core.ts:48` (the `SECRET_VARS` set keeps `SETUP_CODE`, which is still a secret).
+
+**Tests**
+
+| Test file | Change |
+|---|---|
+| `src/test/deploy-button.test.ts` | `:83-85` ("exactly one live line, `SETUP_CODE`") becomes zero live lines. `:96` and `:100` (descriptions match live keys) still hold, for `DB` only. `:115` (SETUP_CODE description mentions 12, private, `/setup`) is deleted. `:25-27` (deploy order) unchanged. |
+| `src/server/setup.test.ts` | New states and decision order; window edges (29:59, 30:00); `SETUP_CODE` wins over the window. Existing cases (`:47-60` and the rest) stay for the code path. |
+| `src/routes/api/setup.test.ts` | New: claim wins once; concurrent claims, exactly one 200; GET never claims; same-origin; claim cookie replace and refuse; sign-in after window expiry works. The code-flow cases stay. |
+| `public/setup.test.ts` | Claim markup and POST shape; "already set up" page. Existing code-form tests stay. |
+| `src/worker/guards-pages.test.ts` (`:95-117`) | Redirect in `claim`; 503 with no redirect when expired. |
+| `src/worker/worker.test.ts` (`:532-690`) | `/setup` 503 text no longer says only `SETUP_CODE`; `/` redirect in `claim` only; HEAD, 405s, `no-store`. |
+| `src/worker/routes.test.ts` (`:11, :47, :76`), `src/test/wrangler-config.test.ts` (`:39`) | **Change** (this was "no change" before the recovery code): `/recover` and `POST /api/recover` are new routes, and `run_worker_first` gains `"/recover"`. The claim itself reuses `/setup` and `POST /api/setup`. |
+| New: `src/routes/api/recover.test.ts`, `public/recover.test.ts`, `src/server/recovery.test.ts` | `/recover`: 404 with no code row; wrong code 401; per-client limit and **no** global cap; a right code replaces the secret and the session secret, makes a new code, and the old code then fails; two concurrent uses of one code, exactly one wins; works after the window, under Access (mode switched back, `changed_by = 'recovery'`) and in password mode; the secret and the code never reach `console.*` or a D1 write unhashed. Shared "save these now" page markup and the single tick. |
+| `src/test/migration-0019.test.ts` | Also covers `recovery_code`: one row at most, `id = 1`, the hash prefix check, empty after a fresh migrate. |
+| `docs/design/access-wizard.md` (other branch) | Its break-glass requirement test is "`SETUP_CODE` valid **or** a recovery row exists". |
+| New code | `src/server/recovery.ts`, `src/routes/api/recover.ts`, `public/recover.html`, `public/recover.js`, a `recoveryClientKey` next to `clientKey`, and a shared "save these now" renderer used by `public/setup.js` and `public/recover.js`; later, `POST /api/admin/recovery-code` and its settings button. |
+| `src/test/migration-0019.test.ts` (new) | Follows `migration-0013.test.ts`: one row, `id = 1`, `opened_at` is a valid ISO time, the row exists after a fresh migrate. |
+| `src/server/auth/test-harness.ts`, `src/server/auth/credentials.test.ts`, `src/server/auth/index.test.ts` | Add a no-`SETUP_CODE` environment helper; atomic claim races; `awaitingSetup` unchanged. |
+| `src/server/auth/ratelimit.test.ts` (`:213`), `src/test/configure.test.ts` (`:119, :137`) | Should not change (the code flow and secret refusal stay). Re-run to confirm. |
+| `src/routes/api/admin/login.test.ts` (`:256-284`), `src/test/migration-0013.test.ts`, `src/test/global-setup.ts` | Should not change. `global-setup.ts` applies the real migrations, so `0019` is exercised implicitly. |
+| `src/test/statement-counts.test.ts` | Check whether the landing route is covered; if the `/` check adds a statement, update the ceiling and `docs/known-limits.md`. |
+
+I list as "should not change" only what I could reason about from the agent's map and a few reads. Running the full suite after the change is the real check.
+
+## 8. Plan for one fresh end-to-end Deploy button run (v1.1, throwaway account)
+
+Purpose: replace belief with a record. The last run was on 6 October 2026, before `v1.1` (it applied "all the database updates that existed then", `README.md:92`). I would run it before approving the code, so the design is built on what the button does today.
+
+I do not have your throwaway accounts, so **you** run the clicks (or tell me how to drive a browser). I record and compare.
+
+**Setup.** A new Cloudflare account on the free plan (new email) and a new GitHub account or a clean organisation. Nothing from the real club. Start a stopwatch. Repo URL: `https://github.com/daveeagle93-lang/slot-booker` at tag `v1.1`. Whether the button accepts a tag or branch in the URL is **unverified**: say so if you have to use the default branch (`main` = `v1.1` today, so it is the same code).
+
+**Run 1, baseline, v1.1 exactly as published.** Record, with a screenshot at each step:
+
+1. The form as shown: the exact fields and order, the `SETUP_CODE` prompt and the description text, whether the example value is prefilled, whether a blank or a 5-character value is accepted. This settles section 2's prefill and "empty" rows for the current form.
+2. The Worker name suggested, and whether the account's `workers.dev` subdomain had to be chosen first.
+3. Build log: which command ran (`npm run deploy`?), that migrations `0001` to `0018` applied with no `0015` failure (`docs/deploying.md:276`), the time the build finished.
+4. **How the organiser finds the URL afterwards.** Does Cloudflare show it, or must they dig through the dashboard? This decides how "open your site" is worded in the README.
+5. `/` and `/admin` with no code set: the 503 behaviour today.
+6. `/setup` with the code, a deliberate wrong code, then the secret, then sign-in; check `/setup` is 404 afterwards.
+7. Total time from button to signed-in, against the README's "about 15 minutes".
+
+**Run 2, the probe (approved to run before any code).** The v1.1 `.dev.vars.example` already has a live blank `SETUP_CODE=` and several commented-out lines (`# BOOKING_CUTOFF_OFFSET_MINUTES=-30`, `# ADMIN_AUTH=password`, and so on). So the baseline run answers two of the three unknowns on its own, if the form is watched closely: does a blank live line block the deploy, and does the button prompt for the commented lines (the README's list of six form items says it did not on 6 October, which I take as one observation, not proof). The probe repos then test the shapes the design needs. Each is a copy of v1.1 in a scratch **public** repo with only these differences:
+
+| Probe | `.dev.vars.example` | `package.json` `cloudflare.bindings` | Question it answers |
+|---|---|---|---|
+| **P0** | v1.1 unchanged (the published repo itself) | unchanged | Baseline. Does the form show `SETUP_CODE`, prefilled? Does a **blank** value block Deploy? Are the commented lines prompted? Is a 5-character code accepted (as `docs/deploying.md:40` claims)? |
+| **P1** | **final shape**: `SETUP_CODE` commented out, every other line as in v1.1, so the file has **zero live lines** | `SETUP_CODE` entry removed (only `DB`) | The one the design relies on: does the form show no secret prompt at all, and does the deploy succeed and the site come up? |
+| **P2** | file **deleted** | `SETUP_CODE` entry removed | Only if P1 fails: does a repo with no example file work? |
+
+Decision rule: P1 deploys with no secret prompt, so implement as written. P1 fails or prompts, but P2 works, so ship with no example file and move the developer documentation to `docs/development.md`. Both fail, so fall back to option B (section 6). The probe repos are throwaway, so nothing is merged; the exact click-by-click script is given to the owner in the session and recorded with the results.
+
+**After implementation**, one more run on the real branch: confirm the form has no secret prompt, `/` redirects, the claim works once, a second browser is refused, the window expiry after 30 minutes (use the D1 console to age `opened_at` rather than waiting), and an update push does not reopen it.
+
+Clean-up: delete the throwaway Worker, database, repo and accounts. Do not paste any secret into notes; record only that it was shown once.
+
+## 9. Decisions (all approved 21 October 2026)
+
+1. **N = 30 minutes** (C1). Approved.
+2. **`SETUP_CODE` set means the window is off** (C3). Approved. The code can still reopen setup after expiry, because setting it moves the state to `open`.
+3. **Claim cookie and one-shot claim** (C4). Approved.
+4. **Run the section 8 probe before implementing.** Approved. Nothing is built until it has been run and its result recorded here.
+5. **Migration number:** zero-config takes `0019`; the wizard branch renumbers to `0020`. Approved.
+6. **No "Admin secret created at <time>" line** on the first admin page. Approved as left out.
+7. **Recovery code and `/recover`** (C7, C8), added by the owner at approval: section 3.6. Whether the signed-in "make a recovery code" action (for existing sites) ships in the first release or with the wizard is **left to the plan**; it is needed only by the wizard.
+
+## 10. What I did not verify
+
+- Everything marked **Unverified** in section 2 (prefill, commented lines, optional or empty secrets, post-deploy URL).
+- Whether the `workers.dev` account subdomain can be enumerated (section 4).
+- Whether a tag or branch can be named in the button URL.
+- That the extra `/` check keeps within the D1 statement counts.
+- That "should not change" tests really do not change; no code was run, no tests were run, and no change was made outside this file.
+- The code facts come from a read of `src/server/setup.ts`, `src/routes/api/setup.ts`, `src/server/auth/credentials.ts`, `src/server/auth/index.ts`, `src/worker/guards.ts`, `src/worker/static.ts`, `migrations/0013_admin_credentials.sql`, `package.json`, `wrangler.jsonc`, `src/test/deploy-button.test.ts` and `src/server/auth/ratelimit.ts` (by me), plus a map by a subagent for the rest (test inventory line numbers in particular).
