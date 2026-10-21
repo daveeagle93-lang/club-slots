@@ -1,6 +1,6 @@
 # Zero-config setup: a first-run claim window instead of `SETUP_CODE`
 
-Status: **approved 21 October 2026, including the recovery code added in section 3.6 (C7, C8). No code written yet; the Deploy button probe (section 8) comes first.** Written 21 October 2026 against `main` = `v1.1` (commit `f71189f`, migrations `0001` to `0018`).
+Status: **approved 21 October 2026, including the recovery code added in section 3.6 (C7, C8). No product code written yet. The Deploy button probe P1 was run on 22 October 2026 and passed (section 8); three design changes that followed from it are in section 3.7.** Written 21 October 2026 against `main` = `v1.1` (commit `f71189f`, migrations `0001` to `0018`).
 
 Goal: a non-technical organiser presses the Deploy button, accepts every default, deploys, opens their site and saves a password. The password sign-in stays the default. Cloudflare Access stays optional.
 
@@ -27,7 +27,7 @@ Decisions I made, for you to check (details in the sections below):
 | C7 | The "save these now" screen shows an admin secret **and a recovery code** (requested by the owner). The code is stored hashed. A `/recover` page uses it to reset the admin secret without the D1 console. | New deployments have no `SETUP_CODE`, so without this a non-technical admin has no way back in. | 3.6 |
 | C8 | `/recover` works **in any sign-in mode**, including Access, and counts as the Access wizard's break-glass. The code is single-use: using it makes a new one. | The wizard needs a recovery route that does not depend on a Worker secret. | 3.6, 5 |
 
-Open questions that need your answer are in section 9.
+All decisions are recorded in section 9; nothing is open.
 
 ## 2. What Cloudflare's Deploy button docs say (checked 21 October 2026)
 
@@ -49,9 +49,25 @@ Method: a research agent read the official pages, and I re-fetched the main page
 
 **What this means for the design.**
 
-1. Nothing in the docs lets us auto-generate a secret at deploy time. A first-run flow on the site itself is the only route to "no typing in the form". The proposal does not depend on any undocumented button behaviour **if** the button copes with a repo that has no live line in `.dev.vars.example`. That is the single thing to prove on a real run (section 8).
-2. If the button turns out to dislike zero entries, the fallback is one honest field, see option B in section 6.
+1. Nothing in the docs lets us auto-generate a secret at deploy time. A first-run flow on the site itself is the only route to "no typing in the form". The proposal does not depend on any undocumented button behaviour **if** the button copes with a repo that has no live line in `.dev.vars.example`. That was the single thing to prove, and the P1 run proved it (2.1, 8.1).
+2. **Resolved:** the button did not dislike zero entries (P1, 2.1), so the fallback, option B in section 6, is not needed.
 3. The `SETUP_CODE` description in `package.json` has to go with its live line: `src/test/deploy-button.test.ts:96` demands a description for every live key, and `:100` fails if a description exists for a key that is not live.
+
+### 2.1 What the P1 probe observed (22 October 2026, one run)
+
+Run by the owner on their own Cloudflare account against a public scratch copy of v1.1 with **zero live lines** in `.dev.vars.example`, no `SETUP_CODE` entry in `package.json`, and unique Worker and database names (section 8). One run, so everything here is "observed once", not "documented".
+
+| Row of the table above | Observed |
+|---|---|
+| Does a repo with **no live secret line** work? | **Yes.** The form showed **no secret field** and the deploy succeeded. Option B (section 6) is not needed. |
+| Are commented-out lines ignored? | **Observed yes, once.** The file kept its commented lines (`# BOOKING_CUTOFF_OFFSET_MINUTES=-30`, `# ADMIN_AUTH=password`, and the rest) and none appeared on the form. |
+| Optional or empty secrets, prefill | Not tested: there was no secret field to test. (P0, which would have tested a blank live line, was skipped because P1 passed.) |
+| Are plain `vars` shown? | **New finding: yes, and editable.** `ADMIN_AUTH` from `wrangler.jsonc` appeared as a text field prefilled `password`. This drives section 3.7 (a). |
+| Command fields | Build command empty; deploy command prefilled `npm run deploy`. So the form does run our `deploy` script, which applies the migrations. |
+| Naming | Project name = Worker name = copy-repo name. The source repo and the target account were the same here, so the name clashed ("A repository with that name already exists") and Cloudflare suggested `-1`. A club deploying from the template into its **own** account has no clash; this is a maintainer-testing effect. |
+| Does the user learn their URL afterwards? | **No.** The `workers.dev` address appeared **only in the build log**; nothing on the completion screen pointed at it. A non-technical user would have to hunt. |
+| Form fields, in order | Git account; "Create private Git repository" checkbox; Project name; Select D1 database (Create new); D1 name; location hint; read replication checkbox; `ADMIN_AUTH`; Build command; Deploy command. The README's "Protect with Cloudflare Access" and "Enable Preview builds" switches (README item 5) were **not seen** in this run, so the README's form list is stale or conditional; it needs rewriting from a fresh run (section 7). |
+| After deploy | `/` showed "Upcoming events / No events are open for booking right now."; `/admin` showed "Admin sign-in isn't set up."; `/setup` showed "Setup isn't ready: set SETUP_CODE …". These are the expected v1.1 answers with no code set. |
 
 ## 3. The proposal
 
@@ -145,6 +161,21 @@ C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker
 
 **Relation to `SETUP_CODE`.** Both can exist. `SETUP_CODE` keeps its v1.1 meaning (C3); the recovery code is the default for people who never chose one. The wizard's break-glass requirement is met by either: "`SETUP_CODE` set and 12+ characters, **or** a `recovery_code` row exists".
 
+### 3.7 Three changes that followed from the probe (approved by the owner on 22 October 2026)
+
+**(a) `ADMIN_AUTH` leaves `wrangler.jsonc` and is defaulted in code.** The form shows every plain `vars` entry as an editable field (2.1), so `"vars": { "ADMIN_AUTH": "password" }` puts a technical-looking box in front of a non-technical organiser. Remove it, in the production block and in `env.preview`, and let the Worker treat a variable that is **not set at all** (`undefined`) as `"password"`.
+
+- Code: three places read it (`src/server/setup.ts:23`, `src/server/auth/index.ts:22` and `:27`, with the error text at `:39`). They go through one helper, for example `adminAuthMode(env)`, so the default is written once.
+- **Only `undefined` defaults.** A misspelt or empty value (`Password`, `none`, ` access`, an empty string) still fails closed with the same 503, as `docs/admin-auth.md:8` promises. That sentence changes from "if `ADMIN_AUTH` is unset, misspelt … every admin page … fails" to "if it is **set** to anything but `access` or `password`".
+- **Cost, to be stated in the docs:** a site on Access whose `ADMIN_AUTH=access` line is lost (an upstream merge resolved the wrong way, a variable deleted in the dashboard) no longer fails closed. It falls back to the password sign-in, and an admin secret made before the switch still sits in D1 and is accepted (`docs/admin-auth.md:171`: "simply not used" only while Access is on). The result is a silent downgrade from one named identity per admin to one shared secret, by operator error, not by an outsider. Mitigations: the docs tell Access users to keep `ADMIN_AUTH` explicit in their own `wrangler.jsonc`; the Access wizard (section 5) moves the choice into D1, where it is not lost by a config edit; and the admin page can name the sign-in mode it is in. The decision to default was the owner's; this paragraph is the price.
+- **Existing deployments.** Anyone on Access has `ADMIN_AUTH=access` in their own copy of `wrangler.jsonc` (that is how `docs/deploying.md:172` told them to do it). Updating from the template then conflicts on the `vars` line; "Updating your copy" must say: keep your `vars`, nothing else changes. Everyone on password mode can delete the line or keep it; both work.
+- `configure` (`scripts/configure-core.ts`): `buildConfig` must create `vars` when a club's `account.local.json` supplies some, because the template no longer has any. I have not read that code, so how much of `src/test/configure.test.ts` changes is **unknown**; see section 7.
+- **Not verified:** that removing `vars` removes the field from the form. It follows from "plain vars are shown", but only the implemented branch's run can prove it (8.2, step 1).
+
+**(b) The window clock.** In the probe, the migrations ran from about 07:22:27 to 07:22:53 and the Worker was live at 07:23:09, **about 16 seconds after the migrations**; the whole deploy took 45 seconds. `0019` stamps `opened_at` while the migrations run, so the window starts about 16 to 40 seconds before the site answers. 30 minutes (C1) is ample for the deploy itself. The real risk to the window is **not finding the address** (next point), not the deploy.
+
+**(c) `/` is the entry point; the README says where the address is.** Nothing on the completion screen shows the address (2.1), so an organiser has to find it. The README and `docs/deploying.md` say, in this order: the address is at the end of the build log; or, in the Cloudflare dashboard, open **Workers & Pages**, then your Worker (named as you named the project); its page shows the `workers.dev` address (menu names **unverified**; check them on the next run). Open that address, not `/setup`: `/` redirects to the claim page (3.4) while the window is open. If the window has run out, the page says how to reopen it (3.5).
+
 ## 4. Threat model
 
 **What is being protected.** The first admin secret of a brand-new, empty site. An attacker who claims it controls the club's admin pages: events, bookings and, from then on, the booker details entered later.
@@ -195,7 +226,7 @@ That file is **not on `main`**. It lives on the branch `docs/access-wizard-desig
 ## 6. Options considered
 
 - **A. Claim window (this proposal).** Zero typing. Costs a short race (section 4).
-- **B. One honest field: "Choose an admin password".** An `ADMIN_PASSWORD` secret typed in the form, hashed by the Worker at first use. Works with documented button behaviour only if the form lets you proceed, and still makes the organiser invent and remember something. Also a bigger code change (the override path takes a pre-hashed value). **Fallback if the button rejects an empty form.**
+- **B. One honest field: "Choose an admin password".** An `ADMIN_PASSWORD` secret typed in the form, hashed by the Worker at first use. Works with documented button behaviour only if the form lets you proceed, and still makes the organiser invent and remember something. Also a bigger code change (the override path takes a pre-hashed value). **Not needed: P1 showed the button accepts a repo with no secret field (2.1).**
 - **C. Keep `SETUP_CODE`, add a placeholder default.** Weakest: a published default is a published password.
 - **D. `secrets.required` or platform-generated secrets.** Not documented for the button; `secrets.required` would fail the build when unset (section 2).
 - **E. Cloudflare Access by default.** Needs a custom domain and an Access app first, which is the barrier we are removing (`docs/admin-auth.md`).
@@ -220,6 +251,12 @@ Produced by a search of the repo (`grep -rn` for `SETUP_CODE`, `/setup`, "setup 
 | `docs/sign-in.md` (l.5) | Describe the default without "the setup code". |
 | `docs/known-limits.md` (l.12) | The rate-limit sentence; add a "claim race" limit. |
 | `docs/costs.md` | Only if the `/` check adds a D1 read (3.4). |
+| `wrangler.jsonc` | Remove `"vars": { "ADMIN_AUTH": "password" }` in the production block and in `env.preview` (3.7 (a)), and rewrite the comment above it (l.32-35). `account.local.example.json` (l.8, 11) keeps its examples. |
+| `README.md` "What the form asks for" | Besides item 4 going: **rewrite the whole list from a fresh look at the form** (2.1). The observed form has no "Protect with Cloudflare Access" or "Enable Preview builds" switches (README item 5), and has a private-repo checkbox, a D1 location hint, a read-replication checkbox and the build and deploy commands. Add the project-name rule (project = Worker = repo name) and where to find the address (3.7 (c)). |
+| `docs/admin-auth.md` (l.8, 22, 31, 85, 171) | Fail-closed wording for `ADMIN_AUTH` (3.7 (a)); settings table (l.22: "`wrangler.jsonc` sets `password`" becomes "unset means `password`"); l.31 (plain variables and deploys); l.85; the Access downgrade note. |
+| `docs/deploying.md` (l.52, 124, 172) | `wrangler.jsonc` no longer sets `ADMIN_AUTH`; the Access steps say to **add** it, and "Updating your copy" says to keep it. |
+| `docs/configuration.md` (l.3, 30, 43-44), `docs/sign-in.md` (l.5), `docs/handover.md` (l.187), `.dev.vars.example` (l.14-15) | Same wording change: nothing sets `ADMIN_AUTH` for a password site any more. |
+| `src/server/auth/index.ts`, `src/server/setup.ts` | One `adminAuthMode(env)` helper (3.7 (a)); `src/server/env.ts` unchanged. |
 | `.dev.vars.example` | Comment `SETUP_CODE=` out, reword it ("optional: recovery and strict setup"), keep every other comment line. |
 | `package.json` `cloudflare.bindings.SETUP_CODE` (l.40-42) | Remove, if the live line goes (the test requires it). |
 | `docs/design/access-wizard.md` | On its own branch, per section 5. |
@@ -232,6 +269,8 @@ Produced by a search of the repo (`grep -rn` for `SETUP_CODE`, `/setup`, "setup 
 
 | Test file | Change |
 |---|---|
+| `src/test/deploy-button.test.ts` (`:76-79`), `src/test/configure.test.ts` (`:82-84, :199-206, :219-238, :284-288, :299-323, :345-358`) | The two `vars` equal `{ ADMIN_AUTH: "password" }` tests become "no `vars`" (and "the form shows no plain variable"). `configure.test.ts` pins the template's `vars` in many places; **how much changes depends on `buildConfig`, which I have not read**. |
+| `src/server/auth/index.test.ts`, `src/server/setup.test.ts`, `src/worker/guards-*.test.ts`, `src/worker/worker.test.ts` | New: `ADMIN_AUTH` unset behaves as `password`; set to `Password`, `none`, an empty string or ` access` still fails closed; `access` unchanged. These files already inject `ADMIN_AUTH` through the harness (`src/server/auth/test-harness.ts:22, 27, 46`). |
 | `src/test/deploy-button.test.ts` | `:83-85` ("exactly one live line, `SETUP_CODE`") becomes zero live lines. `:96` and `:100` (descriptions match live keys) still hold, for `DB` only. `:115` (SETUP_CODE description mentions 12, private, `/setup`) is deleted. `:25-27` (deploy order) unchanged. |
 | `src/server/setup.test.ts` | New states and decision order; window edges (29:59, 30:00); `SETUP_CODE` wins over the window. Existing cases (`:47-60` and the rest) stay for the code path. |
 | `src/routes/api/setup.test.ts` | New: claim wins once; concurrent claims, exactly one 200; GET never claims; same-origin; claim cookie replace and refuse; sign-in after window expiry works. The code-flow cases stay. |
@@ -251,51 +290,60 @@ Produced by a search of the repo (`grep -rn` for `SETUP_CODE`, `/setup`, "setup 
 
 I list as "should not change" only what I could reason about from the agent's map and a few reads. Running the full suite after the change is the real check.
 
-## 8. Plan for one fresh end-to-end Deploy button run (v1.1, throwaway account)
+## 8. Deploy button runs
 
-Purpose: replace belief with a record. The last run was on 6 October 2026, before `v1.1` (it applied "all the database updates that existed then", `README.md:92`). I would run it before approving the code, so the design is built on what the button does today.
+### 8.1 Probe P1: done, passed (22 October 2026)
 
-I do not have your throwaway accounts, so **you** run the clicks (or tell me how to drive a browser). I record and compare.
+Question: does the button work, with no secret field, for a repo whose `.dev.vars.example` has **zero live lines** and whose `package.json` has no `SETUP_CODE` binding?
 
-**Setup.** A new Cloudflare account on the free plan (new email) and a new GitHub account or a clean organisation. Nothing from the real club. Start a stopwatch. Repo URL: `https://github.com/daveeagle93-lang/slot-booker` at tag `v1.1`. Whether the button accepts a tag or branch in the URL is **unverified**: say so if you have to use the default branch (`main` = `v1.1` today, so it is the same code).
+Setup: a throwaway **public** repo under the owner's GitHub account, a copy of v1.1 (`git archive v1.1`) with only these differences: `SETUP_CODE=` commented out in `.dev.vars.example`; the `SETUP_CODE` entry removed from `cloudflare.bindings`; unique Worker and database names in `wrangler.jsonc` (`sb-probe-p1`, `sb-probe-p1-db`, `sb-probe-p1-db-preview`). The owner ran it on their own Cloudflare account, accepting the defaults. P0 (v1.1 unchanged) and P2 (no example file) were not needed and were not run.
 
-**Run 1, baseline, v1.1 exactly as published.** Record, with a screenshot at each step:
+Result, as reported by the owner (07:21 to 07:25 AWST, 22 October 2026):
 
-1. The form as shown: the exact fields and order, the `SETUP_CODE` prompt and the description text, whether the example value is prefilled, whether a blank or a 5-character value is accepted. This settles section 2's prefill and "empty" rows for the current form.
-2. The Worker name suggested, and whether the account's `workers.dev` subdomain had to be chosen first.
-3. Build log: which command ran (`npm run deploy`?), that migrations `0001` to `0018` applied with no `0015` failure (`docs/deploying.md:276`), the time the build finished.
-4. **How the organiser finds the URL afterwards.** Does Cloudflare show it, or must they dig through the dashboard? This decides how "open your site" is worded in the README.
-5. `/` and `/admin` with no code set: the 503 behaviour today.
-6. `/setup` with the code, a deliberate wrong code, then the secret, then sign-in; check `/setup` is 404 afterwards.
-7. Total time from button to signed-in, against the README's "about 15 minutes".
+| Item | Result |
+|---|---|
+| Secret field on the form | **None.** |
+| Commented-out names on the form | None. |
+| Build | Deploy pressed about 07:22:27; migrations `0001` to `0018` all applied (one `wrangler d1 migrations apply` run) by 07:22:53; Worker deployed 07:23:09; **45 seconds in total**. |
+| Bindings | `DB`, `ASSETS`, `ADMIN_AUTH="password"`. No `SETUP_CODE`. |
+| Address | Only in the build log. |
+| `/`, `/admin`, `/setup` | As expected for v1.1 with no code (2.1). |
 
-**Run 2, the probe (approved to run before any code).** The v1.1 `.dev.vars.example` already has a live blank `SETUP_CODE=` and several commented-out lines (`# BOOKING_CUTOFF_OFFSET_MINUTES=-30`, `# ADMIN_AUTH=password`, and so on). So the baseline run answers two of the three unknowns on its own, if the form is watched closely: does a blank live line block the deploy, and does the button prompt for the commented lines (the README's list of six form items says it did not on 6 October, which I take as one observation, not proof). The probe repos then test the shapes the design needs. Each is a copy of v1.1 in a scratch **public** repo with only these differences:
+**Decision (rule from the earlier draft of this section): P1 passes, so implement as designed. No example-file fallback (P2) and no option B.** Section 2.1 records everything else the run showed, and 3.7 the three design changes it caused.
 
-| Probe | `.dev.vars.example` | `package.json` `cloudflare.bindings` | Question it answers |
-|---|---|---|---|
-| **P0** | v1.1 unchanged (the published repo itself) | unchanged | Baseline. Does the form show `SETUP_CODE`, prefilled? Does a **blank** value block Deploy? Are the commented lines prompted? Is a 5-character code accepted (as `docs/deploying.md:40` claims)? |
-| **P1** | **final shape**: `SETUP_CODE` commented out, every other line as in v1.1, so the file has **zero live lines** | `SETUP_CODE` entry removed (only `DB`) | The one the design relies on: does the form show no secret prompt at all, and does the deploy succeed and the site come up? |
-| **P2** | file **deleted** | `SETUP_CODE` entry removed | Only if P1 fails: does a repo with no example file work? |
+**Not covered by P1**, because it ran v1.1 code: the claim, `/recover`, the redirect, window expiry. Those are proved by the post-implementation run.
 
-Decision rule: P1 deploys with no secret prompt, so implement as written. P1 fails or prompts, but P2 works, so ship with no example file and move the developer documentation to `docs/development.md`. Both fail, so fall back to option B (section 6). The probe repos are throwaway, so nothing is merged; the exact click-by-click script is given to the owner in the session and recorded with the results.
+### 8.2 After implementation: one run on the real branch
 
-**After implementation**, one more run on the real branch: confirm the form has no secret prompt, `/` redirects, the claim works once, a second browser is refused, the window expiry after 30 minutes (use the D1 console to age `opened_at` rather than waiting), and an update push does not reopen it.
+On a fresh database (new Worker and database names, so nothing is reused), accepting every default:
 
-Clean-up: delete the throwaway Worker, database, repo and accounts. Do not paste any secret into notes; record only that it was shown once.
+1. The form has **no `ADMIN_AUTH` field** and no secret field (this proves 3.7 (a)'s unverified step).
+2. `/` redirects to the claim page; `/setup` GET does not claim; one press of the button shows the secret **and** the recovery code on one screen.
+3. A second browser is refused ("already set up"); the first browser, with its claim cookie, can ask for a replacement before signing in.
+4. Sign-in works; `/setup` is then 404.
+5. `/recover`: a wrong code is refused; the right code gives a new secret and a new code, and the old code and old sessions stop working.
+6. Window expiry: age `opened_at` in the D1 console (do not wait 30 minutes), check the page says how to reopen, then reopen with the statement in 3.1.
+7. A push to the copy repo redeploys without reopening the window.
+8. Write down where the README's menu names for finding the address were right or wrong (3.7 (c)), and what the form's switches look like (2.1: the README's Access and Preview switches were not seen).
 
-## 9. Decisions (all approved 21 October 2026)
+Clean-up of anything created is part of each run: the source repo, the copy repo, the Worker and the database. Do not paste any secret into notes; record only that it was shown once.
+
+## 9. Decisions (approved 21 and 22 October 2026)
 
 1. **N = 30 minutes** (C1). Approved.
 2. **`SETUP_CODE` set means the window is off** (C3). Approved. The code can still reopen setup after expiry, because setting it moves the state to `open`.
 3. **Claim cookie and one-shot claim** (C4). Approved.
-4. **Run the section 8 probe before implementing.** Approved. Nothing is built until it has been run and its result recorded here.
+4. **Run the probe before implementing.** Approved and done: P1 passed (8.1).
 5. **Migration number:** zero-config takes `0019`; the wizard branch renumbers to `0020`. Approved.
 6. **No "Admin secret created at <time>" line** on the first admin page. Approved as left out.
 7. **Recovery code and `/recover`** (C7, C8), added by the owner at approval: section 3.6. Whether the signed-in "make a recovery code" action (for existing sites) ships in the first release or with the wizard is **left to the plan**; it is needed only by the wizard.
+8. **P1 passed: implement as designed** (22 October 2026), with the three changes in 3.7: `ADMIN_AUTH` out of `wrangler.jsonc` and defaulted in code (only when unset), the window clock left at 30 minutes, and `/` plus README guidance for finding the address.
 
 ## 10. What I did not verify
 
-- Everything marked **Unverified** in section 2 (prefill, commented lines, optional or empty secrets, post-deploy URL).
+- Section 2 rows still marked **Unverified**: prefilled or optional secrets and a blank live line (not tested: no secret field existed in P1; P0 was not run). "Commented lines are ignored" and "zero live lines works" are **observed once** (P1), not documented.
+- That removing `vars` removes the `ADMIN_AUTH` field from the form (3.7 (a)); the dashboard menu names in 3.7 (c).
+- How `buildConfig` (`scripts/configure-core.ts`) copes with a template that has no `vars`.
 - Whether the `workers.dev` account subdomain can be enumerated (section 4).
 - Whether a tag or branch can be named in the button URL.
 - That the extra `/` check keeps within the D1 statement counts.
