@@ -42,6 +42,13 @@ export function beforeStatement(db: D1Database, match: RegExp, hook: () => Promi
     batch: (statements: D1PreparedStatement[]) => db.batch(statements),
   } as unknown as D1Database;
 }
+/** An environment with no ADMIN_AUTH and no SETUP_CODE, as on a fresh zero-config deployment. */
+export const claimEnv = (db: D1Database, over: Partial<AppEnv> = {}): AppEnv => ({ DB: db, ...over });
+export async function setOpenedAt(db: D1Database, iso: string): Promise<void> {
+  await db.prepare("UPDATE auth_settings SET setup_opened_at = ? WHERE id = 1").bind(iso).run();
+}
+/** Makes the claim window have opened `ms` milliseconds ago. */
+export const ageWindow = (db: D1Database, ms: number): Promise<void> => setOpenedAt(db, new Date(Date.now() - ms).toISOString());
 export const accessEnv = (db: D1Database): AppEnv => ({
   DB: db, ADMIN_AUTH: "access", ACCESS_TEAM_DOMAIN: ACCESS_TEAM, ACCESS_AUD,
 });

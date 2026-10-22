@@ -244,7 +244,7 @@ describe("behind the admin guard", () => {
     it("is 503 when admin auth is not configured", async () => {
       const { slug } = await insertEvent(t.env.DB);
       const { env, app, auth } = await make();
-      const res = await app({ ...(env as AppEnv), ADMIN_AUTH: undefined }, `/api/admin/events/${slug}/export.csv`, { headers: auth });
+      const res = await app({ ...(env as AppEnv), ADMIN_AUTH: "" }, `/api/admin/events/${slug}/export.csv`, { headers: auth });
       expect(res.status).toBe(503);
     });
   });

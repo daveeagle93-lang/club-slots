@@ -1,7 +1,7 @@
 /// <reference types="node" />
 // BACK-COMPAT REPLAY of the v1.0 golden outputs (src/test/fixtures/v1-golden, captured from commit 7810f8c: see its README.md).
 // It builds a local D1 migrated to 0014 only (as a v1.0 deployment is), loads the golden fixture's seed.sql, applies
-// the remaining migrations (0015 to 0018: the bookings rebuild for lanes and places, then the booking form's fields, with real
+// the remaining migrations (0015 to 0019: the bookings rebuild for lanes and places, then the booking form's fields, then the auth settings, with real
 // `wrangler d1 migrations apply`), then replays the same scenario as the capture script (the real Worker handlers and the real
 // booking.js / schedule.js in happy-dom, same fixed clock, same normalisation) against the CURRENT code, and compares every output
 // with the committed file. Text outputs (HTML, text, CSV, .ics with its UID, lineup, share, privacy) must be byte-identical.
@@ -533,7 +533,7 @@ const T = {
 const tokenOf = (id: number) => `tok-b${String(id).padStart(2, "0")}-0123456789abcdef`;
 const FIXTURE_TOKENS = new Set(Array.from({ length: 16 }, (_, i) => tokenOf(i + 1))); // the seeded bookings 1 to 16
 
-// A database migrated to 0014 and holding the golden seed, then taken through 0015 to 0018 by `wrangler d1 migrations apply`:
+// A database migrated to 0014 and holding the golden seed, then taken through 0015 to 0019 by `wrangler d1 migrations apply`:
 // what a v1.0 deployment looks like after updating. Built once; each scenario works on its own copy.
 let migrated: StagedDb;
 beforeAll(async () => {
@@ -541,7 +541,7 @@ beforeAll(async () => {
   // One statement per line (the fixture's own rule), so a semicolon inside a text value is not a split point.
   const seed = readFileSync(join(FIXTURES, "seed.sql"), "utf8").split("\n").filter((l) => l.trim() !== "" && !l.startsWith("--"));
   await v1.env.DB.batch(seed.map((s) => v1.env.DB.prepare(s)));
-  await v1.applyThrough("0018");
+  await v1.applyThrough("0019");
   migrated = v1;
 }, 300_000);
 afterAll(async () => { await migrated?.dispose(); });

@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { adminAuthFor } from "../../../server/auth";
 import {
-  accessClaims, accessEnv, accessJwt, adminApp, jwksFetch, NOW, newAccessKey, ORIGIN, passwordEnv, TEST_PASSWORD,
+  ACCESS_AUD, ACCESS_TEAM, accessClaims, accessEnv, accessJwt, adminApp, jwksFetch, NOW, newAccessKey, ORIGIN, passwordEnv, TEST_PASSWORD,
 } from "../../../server/auth/test-harness";
 import { csrfToken } from "../../../server/auth/csrf";
 import { createTestEnv, type TestEnv } from "../../../test/db";
@@ -8,6 +9,12 @@ import { createTestEnv, type TestEnv } from "../../../test/db";
 let t: TestEnv;
 beforeAll(async () => { t = await createTestEnv(); });
 afterAll(async () => { await t.dispose(); });
+// Tests here pin Access into the shared settings row; each starts from the password default.
+beforeEach(async () => {
+  await t.env.DB.prepare(
+    "UPDATE auth_settings SET mode = 'password', access_team_domain = NULL, access_aud = NULL, access_hostname = NULL, changed_at = NULL, changed_by = NULL WHERE id = 1",
+  ).run();
+});
 
 describe("GET /api/admin/session", () => {
   it("with Access: the verified email, the provider and a token bound to the JWT", async () => {
@@ -29,6 +36,63 @@ describe("GET /api/admin/session", () => {
     const res = await app(await passwordEnv(t.env.DB), "/api/admin/session");
     expect(res.status).toBe(401);
     expect(await res.json()).toMatchObject({ error: { code: "unauthenticated" }, provider: "password" });
+  });
+});
+
+describe("GET /api/admin/session: pinning env Access into auth_settings", () => {
+  const settings = () => t.env.DB.prepare(
+    "SELECT mode, access_team_domain, access_aud, access_hostname, changed_at, changed_by FROM auth_settings WHERE id = 1",
+  ).first();
+
+  it("writes the pin on a verified Access sign-in, once, and then Access holds without ADMIN_AUTH", async () => {
+    const key = await newAccessKey("k");
+    const deps = { now: () => NOW, fetch: jwksFetch(() => [key]) as unknown as typeof fetch };
+    const app = adminApp(deps);
+    const headers = { "Cf-Access-Jwt-Assertion": await accessJwt(key) };
+    expect((await app(accessEnv(t.env.DB), "/api/admin/session", { headers })).status).toBe(200);
+    const pinned = await settings();
+    expect(pinned).toMatchObject({ mode: "access", access_team_domain: ACCESS_TEAM, access_aud: ACCESS_AUD, access_hostname: "club.example", changed_by: "import" });
+    expect((await app(accessEnv(t.env.DB), "/api/admin/session", { headers })).status).toBe(200);
+    expect(await settings()).toEqual(pinned); // identical values: nothing written, changed_at kept
+
+    // The env line is lost: D1 alone now selects Access, with the pinned values.
+    const lost = await adminAuthFor({ DB: t.env.DB }, deps);
+    expect("auth" in lost && lost.auth.kind).toBe("access");
+    const viaApp = await app({ DB: t.env.DB }, "/api/admin/session", { headers });
+    expect(viaApp.status).toBe(200);
+    expect(await viaApp.json()).toMatchObject({ identity: "admin@club.example", provider: "access" });
+  });
+
+  it("never writes with the password provider", async () => {
+    const app = adminApp({ now: () => NOW });
+    const env = await passwordEnv(t.env.DB);
+    const login = await app(env, "/api/admin/login", {
+      method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", "CF-Connecting-IP": "198.18.0.1" },
+      body: JSON.stringify({ password: TEST_PASSWORD }),
+    });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    expect((await app(env, "/api/admin/session", { headers: { Cookie: cookie } })).status).toBe(200);
+    expect(await settings()).toMatchObject({ mode: "password", access_team_domain: null, changed_by: null });
+  });
+
+  it("still answers when the pin fails, and logs the message only", async () => {
+    const key = await newAccessKey("k");
+    const app = adminApp({ now: () => NOW, fetch: jwksFetch(() => [key]) as unknown as typeof fetch });
+    const jwt = await accessJwt(key);
+    await t.env.DB.prepare("DROP TRIGGER IF EXISTS fail_pin").run();
+    await t.env.DB.prepare("CREATE TRIGGER fail_pin BEFORE UPDATE ON auth_settings BEGIN SELECT RAISE(ABORT, 'pin blocked'); END").run();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await app(accessEnv(t.env.DB), "/api/admin/session", { headers: { "Cf-Access-Jwt-Assertion": jwt } });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ identity: "admin@club.example", provider: "access" });
+      expect(logged).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(logged.mock.calls)).not.toContain(jwt);
+    } finally {
+      logged.mockRestore();
+      await t.env.DB.prepare("DROP TRIGGER fail_pin").run();
+    }
+    expect(await settings()).toMatchObject({ mode: "password" });
   });
 });
 

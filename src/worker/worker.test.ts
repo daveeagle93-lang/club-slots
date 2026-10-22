@@ -18,8 +18,14 @@ const table = createRoutes();
 const adminRoutes = table.filter((r) => r.access === "admin");
 const PUBLIC_DIR = join(import.meta.dirname, "../../public");
 
-/** A database that fails the test if anything uses it: an unguarded handler would reach for it. */
-const noDb = new Proxy({}, { get: (_t, key) => { throw new Error(`The database was used (${String(key)})`); } }) as D1Database;
+/**
+ * A database that fails the test if anything but the guard's one batch read of the sign-in mode and credentials uses it
+ * (it answers that with no rows): an unguarded handler would reach for it.
+ */
+const noDb = {
+  batch: async () => [{ results: [] }, { results: [] }],
+  prepare: () => ({}),
+} as unknown as D1Database;
 
 /** An ASSETS stub that records every request it is given and answers 200 `asset:<path>`. */
 const recordingAssets = () => {
@@ -89,8 +95,8 @@ describe("the admin API is guarded whatever the route table says", () => {
     }
   });
 
-  it("answers 503 for every admin route and method when ADMIN_AUTH is unset", async () => {
-    const env = { ...(await passwordEnv(noDb)), ADMIN_AUTH: undefined };
+  it("answers 503 for every admin route and method when ADMIN_AUTH is empty", async () => {
+    const env = { ...(await passwordEnv(noDb)), ADMIN_AUTH: "" };
     for (const route of adminRoutes) {
       for (const method of METHODS) {
         const res = await send(env, fill(route.pattern), { method, headers: writeHeaders("anything") });
@@ -143,8 +149,8 @@ describe("the admin pages are guarded whatever is in public/admin/", () => {
     }
   });
 
-  it("answers 503 for every page when ADMIN_AUTH is unset", async () => {
-    const env = { ...(await passwordEnv(noDb)), ADMIN_AUTH: undefined };
+  it("answers 503 for every page when ADMIN_AUTH is empty", async () => {
+    const env = { ...(await passwordEnv(noDb)), ADMIN_AUTH: "" };
     for (const path of [...urls, "/admin/zzz"]) {
       const { seen, fetcher } = recordingAssets();
       expect((await send({ ...env, ASSETS: fetcher }, path)).status, path).toBe(503);

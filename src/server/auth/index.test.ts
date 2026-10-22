@@ -10,13 +10,91 @@ let hash: string;
 let t: TestEnv;
 beforeAll(async () => { hash = await hashAdminSecret(generateAdminSecret()); t = await createTestEnv(); });
 afterAll(async () => { await t.dispose(); });
-beforeEach(async () => { await t.env.DB.prepare("DELETE FROM admin_credentials").run(); });
-// A database with no credentials row, and nothing else, for the settings that must not need one.
-const noRow = { prepare: () => ({ first: async () => null }) } as unknown as D1Database;
+beforeEach(async () => {
+  await t.env.DB.prepare("DELETE FROM admin_credentials").run();
+  await t.env.DB.prepare("UPDATE auth_settings SET mode = 'password', access_team_domain = NULL, access_aud = NULL, access_hostname = NULL, changed_by = NULL WHERE id = 1").run();
+});
+// A database with no settings row and no credentials row, and nothing else, for the settings that must not need one.
+const noRow = { prepare: () => ({ first: async () => null }), batch: async () => [{ results: [] }, { results: [] }] } as unknown as D1Database;
 const env = (over: Partial<AppEnv>): AppEnv => ({ DB: noRow, ...over });
 /** A database that fails the test if anything uses it. */
 const noDb = new Proxy({}, { get: (_t, key) => { throw new Error(`The database was used (${String(key)})`); } }) as D1Database;
 const SECRET = "s".repeat(32);
+
+describe("adminAuthFor: the sign-in mode (design 3.8)", () => {
+  const ACCESS = { ACCESS_TEAM_DOMAIN: "club.cloudflareaccess.com", ACCESS_AUD: "aud" };
+  const setMode = (mode: "password" | "access") => t.env.DB.prepare(
+    "UPDATE auth_settings SET mode = ?, access_team_domain = ?, access_aud = ?, access_hostname = ?, changed_by = ? WHERE id = 1",
+  ).bind(mode, mode === "access" ? "d1club.cloudflareaccess.com" : null, mode === "access" ? "d1-aud" : null, mode === "access" ? "club.example" : null, mode === "access" ? "wizard" : null).run();
+  const accessOf = (r: Awaited<ReturnType<typeof adminAuthFor>>) => {
+    if (!("auth" in r) || r.auth.kind !== "access") throw new Error(`expected Access, got ${JSON.stringify(r)}`);
+    return r.auth;
+  };
+
+  it("env access decides without reading D1 at all", async () => {
+    const throwing = { prepare: () => { throw new Error("prepare used"); }, batch: () => { throw new Error("batch used"); } } as unknown as D1Database;
+    expect(accessOf(await adminAuthFor(env({ DB: throwing, ADMIN_AUTH: "access", ...ACCESS })))).toBeDefined();
+    expect(await adminAuthFor(env({ DB: throwing, ADMIN_AUTH: "access", ACCESS_TEAM_DOMAIN: "evil.example", ACCESS_AUD: "aud" }))).toMatchObject({ error: "not_configured" });
+  });
+
+  // A well-formed token with an unknown kid makes the provider fetch the keys from the team domain it was built with.
+  const seg = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const keysUrlOf = async (e: AppEnv): Promise<string[]> => {
+    const urls: string[] = [];
+    const fetcher = (async (url: string) => { urls.push(url); return new Response("", { status: 500 }); }) as unknown as typeof fetch;
+    const auth = accessOf(await adminAuthFor(e, { fetch: fetcher }));
+    await auth.authenticate(new Request("https://club.example/", { headers: { "Cf-Access-Jwt-Assertion": `${seg({ alg: "RS256", kid: "k" })}.${seg({})}.AAAA` } }));
+    return urls;
+  };
+
+  it("env access takes its values from env, not from D1", async () => {
+    await setMode("access");
+    expect(await keysUrlOf(env({ DB: t.env.DB, ADMIN_AUTH: "access", ...ACCESS }))).toEqual(["https://club.cloudflareaccess.com/cdn-cgi/access/certs"]);
+  });
+
+  it("unset or password, with D1 access: Access from the D1 values", async () => {
+    await setMode("access");
+    for (const ADMIN_AUTH of [undefined, "password"]) {
+      expect(await keysUrlOf(env({ DB: t.env.DB, ADMIN_AUTH })), String(ADMIN_AUTH)).toEqual(["https://d1club.cloudflareaccess.com/cdn-cgi/access/certs"]);
+    }
+  });
+
+  it("D1 access beats leftover env password credentials", async () => {
+    await setMode("access");
+    const r = await adminAuthFor(env({ DB: t.env.DB, ADMIN_PASSWORD_HASH: hash, ADMIN_SESSION_SECRET: SECRET }));
+    expect(accessOf(r)).toBeDefined();
+    expect(accessOf(await adminAuthFor(env({ DB: t.env.DB, ADMIN_AUTH: "password", ADMIN_PASSWORD_HASH: hash, ADMIN_SESSION_SECRET: SECRET })))).toBeDefined();
+  });
+
+  it("D1 access with values that are unusable fails closed", async () => {
+    await setMode("access");
+    await t.env.DB.prepare("UPDATE auth_settings SET access_team_domain = 'evil.example' WHERE id = 1").run();
+    expect(await adminAuthFor(env({ DB: t.env.DB }))).toMatchObject({ error: "not_configured" });
+  });
+
+  it("unset, D1 password, no credentials: awaiting setup, with the reworded reason", async () => {
+    expect(await adminAuthFor(env({ DB: t.env.DB }))).toEqual({
+      error: "not_configured", reason: "no admin credentials yet: open /setup", awaitingSetup: true,
+    });
+  });
+
+  it("unset, D1 password, credentials in D1 or in env: the password provider", async () => {
+    const fromEnv = await adminAuthFor(env({ DB: t.env.DB, ADMIN_PASSWORD_HASH: hash, ADMIN_SESSION_SECRET: SECRET }));
+    expect("auth" in fromEnv && fromEnv.auth.kind).toBe("password");
+    await saveCredentials(t.env.DB, { secretHash: hash, sessionSecret: "u".repeat(43), createdAt: "2026-10-05T10:00:00.000Z" });
+    const fromD1 = await adminAuthFor(env({ DB: t.env.DB }));
+    expect("auth" in fromD1 && fromD1.auth.kind).toBe("password");
+  });
+
+  it("anything but unset, password or access is not_configured, whatever D1 says", async () => {
+    for (const mode of ["password", "access"] as const) {
+      await setMode(mode);
+      for (const ADMIN_AUTH of ["", "Password", " access", "none", "ACCESS"]) {
+        expect(await adminAuthFor(env({ DB: t.env.DB, ADMIN_AUTH })), `${mode} ${JSON.stringify(ADMIN_AUTH)}`).toMatchObject({ error: "not_configured" });
+      }
+    }
+  });
+});
 
 describe("adminAuthFor", () => {
   it("selects Access when it is configured", async () => {
@@ -31,7 +109,7 @@ describe("adminAuthFor", () => {
 
   it("fails closed for anything else", async () => {
     const good = { ADMIN_PASSWORD_HASH: hash, ADMIN_SESSION_SECRET: SECRET, ACCESS_TEAM_DOMAIN: "club.cloudflareaccess.com", ACCESS_AUD: "aud" };
-    for (const ADMIN_AUTH of [undefined, "", "none", "off", "Password", "ACCESS", " access", "password ", "true", "access,password"]) {
+    for (const ADMIN_AUTH of ["", "none", "off", "Password", "ACCESS", " access", "password ", "true", "access,password"]) {
       expect(await adminAuthFor(env({ ...good, ADMIN_AUTH })), String(ADMIN_AUTH)).toMatchObject({ error: "not_configured" });
     }
   });
@@ -112,16 +190,13 @@ describe("adminAuthFor with credentials in D1", () => {
     }
   });
 
-  it("does not touch the database in env mode, or for Access, or when ADMIN_AUTH is something else", async () => {
-    const both = { ADMIN_PASSWORD_HASH: hash, ADMIN_SESSION_SECRET: "s".repeat(32) };
-    const r = await adminAuthFor(env({ DB: noDb, ADMIN_AUTH: "password", ...both }));
-    expect("auth" in r && r.auth.kind).toBe("password");
+  it("does not touch the database for env Access, or when ADMIN_AUTH is something else", async () => {
     expect(await adminAuthFor(env({ DB: noDb, ADMIN_AUTH: "access", ACCESS_TEAM_DOMAIN: "club.cloudflareaccess.com", ACCESS_AUD: "aud" }))).toHaveProperty("auth");
-    expect(await adminAuthFor(env({ DB: noDb, ADMIN_AUTH: undefined }))).toMatchObject({ error: "not_configured" });
+    expect(await adminAuthFor(env({ DB: noDb, ADMIN_AUTH: "" }))).toMatchObject({ error: "not_configured" });
   });
 
   it("has a confirmSignIn that does nothing and succeeds in env mode, and marks the first sign-in in D1 mode", async () => {
-    const envMode = await adminAuthFor(env({ DB: noDb, ADMIN_AUTH: "password", ADMIN_PASSWORD_HASH: hash, ADMIN_SESSION_SECRET: "s".repeat(32) }));
+    const envMode = await adminAuthFor(env({ DB: t.env.DB, ADMIN_AUTH: "password", ADMIN_PASSWORD_HASH: hash, ADMIN_SESSION_SECRET: "s".repeat(32) }));
     if (!("auth" in envMode) || envMode.auth.kind !== "password") throw new Error("expected the password provider");
     expect(await envMode.auth.confirmSignIn()).toBe(true);
 

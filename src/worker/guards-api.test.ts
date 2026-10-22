@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { AppEnv } from "../server/env";
 import {
   accessClaims, accessEnv, accessJwt, adminApp, d1Env, jwksFetch, NOW, newAccessKey, ORIGIN, passwordEnv, TEST_PASSWORD,
@@ -9,6 +9,12 @@ import { createTestEnv, type TestEnv } from "../test/db";
 let t: TestEnv;
 beforeAll(async () => { t = await createTestEnv(); });
 afterAll(async () => { await t.dispose(); });
+// A verified Access sign-in pins Access into the shared settings row; each test starts from the password default.
+beforeEach(async () => {
+  await t.env.DB.prepare(
+    "UPDATE auth_settings SET mode = 'password', access_team_domain = NULL, access_aud = NULL, access_hostname = NULL, changed_at = NULL, changed_by = NULL WHERE id = 1",
+  ).run();
+});
 
 interface Provider {
   name: "password" | "access";
@@ -151,7 +157,7 @@ describe("unconfigured admin", () => {
   it("answers 503 on every admin path and method, even with credentials, and never falls open", async () => {
     const good = await passwordEnv(t.env.DB);
     const variants: AppEnv[] = [
-      { ...good, ADMIN_AUTH: undefined }, { ...good, ADMIN_AUTH: "" }, { ...good, ADMIN_AUTH: "none" }, { ...good, ADMIN_AUTH: "Password" },
+      { ...good, ADMIN_AUTH: "" }, { ...good, ADMIN_AUTH: "none" }, { ...good, ADMIN_AUTH: "Password" },
       { ...good, ADMIN_AUTH: "ACCESS" }, { ...good, ADMIN_PASSWORD_HASH: "pbkdf2-sha256$100000$bad$bad" },
       { ...good, ADMIN_SESSION_SECRET: "short" }, { ...accessEnv(t.env.DB), ACCESS_TEAM_DOMAIN: "evil.example" },
     ];

@@ -154,9 +154,9 @@ describe("settings routes are admin-only and CSRF-protected", () => {
       expect(await stateOf()).toEqual(before);
     });
 
-    it.each(ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))("%s: 503 when ADMIN_AUTH is unset or wrong, even with credentials", async (_label, r) => {
+    it.each(ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))("%s: 503 when ADMIN_AUTH is empty or wrong, even with credentials", async (_label, r) => {
       const headers = r.method === "GET" ? { ...(await p.auth()) } : writeHeaders("x", await p.auth());
-      for (const ADMIN_AUTH of [undefined, "", "none", "Password"]) {
+      for (const ADMIN_AUTH of ["", "none", "Password"]) {
         const res = await send(r, headers, { env: { ...p.env, ADMIN_AUTH } });
         expect(res.status, String(ADMIN_AUTH)).toBe(503);
         expect(await res.json()).toMatchObject({ error: { code: "admin_not_configured" } });

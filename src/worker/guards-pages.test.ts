@@ -78,7 +78,7 @@ describe("admin pages with the Access provider", () => {
 describe("admin pages when unconfigured", () => {
   it("answers 503 text/plain for every page and never calls next", async () => {
     const good = await passwordEnv(t.env.DB);
-    for (const env of [{ ...good, ADMIN_AUTH: undefined }, { ...good, ADMIN_AUTH: "none" }, { ...good, ADMIN_AUTH: "Password" }, { ...good, ADMIN_SESSION_SECRET: "short" }]) {
+    for (const env of [{ ...good, ADMIN_AUTH: "" }, { ...good, ADMIN_AUTH: "none" }, { ...good, ADMIN_AUTH: "Password" }, { ...good, ADMIN_SESSION_SECRET: "short" }]) {
       for (const path of [...PAGES, "/admin/login", "/admin/login.js"]) {
         const { res, reached } = await visit(env, path);
         expect(res.status, path).toBe(503);
