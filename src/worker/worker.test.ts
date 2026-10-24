@@ -1,8 +1,9 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { accessEnv, d1Env, NOW, ORIGIN, passwordEnv, SETUP_CODE, TEST_PASSWORD, writeHeaders } from "../server/auth/test-harness";
+import { accessEnv, ageWindow, claimEnv, d1Env, NOW, ORIGIN, passwordEnv, SETUP_CODE, TEST_PASSWORD, writeHeaders } from "../server/auth/test-harness";
 import type { AppEnv } from "../server/env";
+import { setupNotReadyMessage } from "../server/setup";
 import { createTestEnv, type TestEnv } from "../test/db";
 import { pageAssets, publicAssets } from "../test/assets";
 import { createWorker } from "../worker";
@@ -578,20 +579,43 @@ describe("first-run setup through the Worker", () => {
     await reset();
   });
 
-  it("answers GET /setup with a short 503 explanation, not the page, when SETUP_CODE is missing or too short", async () => {
+  it("answers GET /setup with the 503 text of setupNotReadyMessage, not the page, for a too-short SETUP_CODE and for an expired window", async () => {
     await reset();
     const { seen, fetcher } = recordingAssets();
-    for (const code of [undefined, "short"]) {
-      const res = await send({ ...d1Env(t.env.DB, { SETUP_CODE: code }), ASSETS: fetcher }, "/setup");
-      expect(res.status).toBe(503);
-      expect(res.headers.get("content-type")).toContain("text/plain");
-      expect(res.headers.get("cache-control")).toBe("no-store");
-      const text = await res.text();
-      expect(text).toContain("SETUP_CODE");
-      expect(text).toContain("12");
-      expect(text).not.toContain("short");
+    const short = await send({ ...d1Env(t.env.DB, { SETUP_CODE: "short" }), ASSETS: fetcher }, "/setup");
+    expect(short.status).toBe(503);
+    expect(short.headers.get("content-type")).toContain("text/plain");
+    expect(short.headers.get("cache-control")).toBe("no-store");
+    expect(await short.text()).toBe(setupNotReadyMessage("short_code"));
+    await ageWindow(t.env.DB, 31 * 60_000);
+    try {
+      const expired = await send({ ...claimEnv(t.env.DB), ASSETS: fetcher }, "/setup");
+      expect(expired.status).toBe(503);
+      expect(expired.headers.get("content-type")).toContain("text/plain");
+      expect(expired.headers.get("cache-control")).toBe("no-store");
+      expect(await expired.text()).toBe(setupNotReadyMessage("expired"));
+    } finally {
+      await ageWindow(t.env.DB, 0);
     }
     expect(seen).toHaveLength(0);
+  });
+
+  it("serves GET /setup in the claim state (no SETUP_CODE, window open) and once a secret has been made but not used (claimed)", async () => {
+    await reset();
+    await ageWindow(t.env.DB, 0);
+    for (const phase of ["claim", "claimed"]) {
+      if (phase === "claimed") {
+        await t.env.DB.prepare("INSERT INTO admin_credentials (id, secret_hash, session_secret, created_at) VALUES (1, ?, ?, ?)")
+          .bind((await passwordEnv(t.env.DB)).ADMIN_PASSWORD_HASH, "s".repeat(43), "2026-10-05T10:00:00.000Z").run();
+      }
+      const { seen, fetcher } = recordingAssets();
+      const res = await send({ ...claimEnv(t.env.DB), ASSETS: fetcher }, "/setup");
+      expect(res.status, phase).toBe(200);
+      expect(await res.text(), phase).toBe("asset:/setup");
+      expect(res.headers.get("cache-control"), phase).toBe("no-store");
+      expect(seen, phase).toHaveLength(1);
+    }
+    await reset();
   });
 
   it("allows only GET and HEAD on /setup, and only GET, HEAD and POST on /api/setup", async () => {
@@ -671,15 +695,31 @@ describe("first-run setup through the Worker", () => {
     await reset();
   });
 
-  it("sends the admin pages to /setup while there are no credentials and setup is open, and to a 503 when it is not ready", async () => {
+  it("sends the admin pages to /setup while there are no credentials and setup is open or claimable, and to a 503 when it is not ready", async () => {
     await reset();
+    await ageWindow(t.env.DB, 0);
     for (const path of ["/admin", "/admin/", "/admin/login", "/admin/settings"]) {
       const { seen, fetcher } = recordingAssets();
-      const res = await send({ ...d1Env(t.env.DB), ASSETS: fetcher }, path);
-      expect(res.status, path).toBe(302);
-      expect(res.headers.get("location"), path).toBe("/setup");
+      for (const env of [d1Env(t.env.DB), claimEnv(t.env.DB)]) {
+        const res = await send({ ...env, ASSETS: fetcher }, path);
+        expect(res.status, path).toBe(302);
+        expect(res.headers.get("location"), path).toBe("/setup");
+        expect(res.headers.get("cache-control"), path).toBe("no-store");
+      }
       expect(seen, path).toHaveLength(0);
-      expect((await send({ ...d1Env(t.env.DB, { SETUP_CODE: undefined }), ASSETS: fetcher }, path)).status, path).toBe(503);
+      const short = await send({ ...d1Env(t.env.DB, { SETUP_CODE: "short" }), ASSETS: fetcher }, path);
+      expect(short.status, path).toBe(503);
+      expect(short.headers.get("location"), path).toBeNull();
+    }
+    await ageWindow(t.env.DB, 31 * 60_000);
+    try {
+      for (const path of ["/admin", "/admin/login"]) {
+        const res = await send({ ...claimEnv(t.env.DB), ASSETS: recordingAssets().fetcher }, path);
+        expect(res.status, path).toBe(503);
+        expect(res.headers.get("location"), path).toBeNull();
+      }
+    } finally {
+      await ageWindow(t.env.DB, 0);
     }
   });
 
@@ -690,5 +730,77 @@ describe("first-run setup through the Worker", () => {
     expect((await postJson(env, "/api/setup", { code: SETUP_CODE })).status).toBe(404);
     expect((await postJson(env, "/api/admin/login", { password: TEST_PASSWORD }, 7)).status).toBe(200);
     expect(await t.env.DB.prepare("SELECT COUNT(*) AS n FROM admin_credentials").first<{ n: number }>()).toEqual({ n: 0 });
+  });
+});
+
+describe("the landing page and the claim redirect", () => {
+  /** The test database seen through a wrapper that records its SQL; a new object each time, so claimOpenCached's memo starts empty. */
+  const spied = () => {
+    const sql: string[] = [];
+    const db = {
+      prepare: (text: string) => { sql.push(text); return t.env.DB.prepare(text); },
+      batch: (list: D1PreparedStatement[]) => t.env.DB.batch(list),
+    } as unknown as D1Database;
+    return { db, authReads: () => sql.filter((q) => q.includes("auth_settings")).length };
+  };
+  const open = async () => {
+    await t.env.DB.prepare("DELETE FROM admin_credentials").run();
+    await ageWindow(t.env.DB, 0);
+  };
+
+  it("redirects GET / to /setup, no-store, while the claim window is open, without fetching the page", async () => {
+    await open();
+    const assets = pageAssets();
+    const res = await send({ ...claimEnv(spied().db), ASSETS: assets }, "/");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/setup");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(hasSecurityHeaders(res)).toBe(true);
+    expect(assets.requests).toHaveLength(0);
+  });
+
+  it("answers HEAD / with the page's 200 and no redirect in the claim state, without reading auth_settings", async () => {
+    await open();
+    const { db, authReads } = spied();
+    const res = await send({ ...claimEnv(db), ASSETS: pageAssets() }, "/", { method: "HEAD" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+    expect(authReads()).toBe(0);
+  });
+
+  it("leaves /e/<anything> and /api/events alone in the claim state, and reads auth_settings for neither", async () => {
+    await open();
+    const { db, authReads } = spied();
+    const env = { ...claimEnv(db), ASSETS: pageAssets() };
+    for (const path of ["/e/anything", "/e/a/b", "/api/events"]) {
+      for (const method of ["GET", "HEAD"]) {
+        const res = await send(env, path, { method });
+        expect(res.status, `${method} ${path}`).not.toBe(302);
+        expect(res.headers.get("location"), `${method} ${path}`).toBeNull();
+      }
+    }
+    expect(authReads()).toBe(0);
+  });
+
+  it("serves the landing page again as soon as a secret has been made (a claimable result is never remembered)", async () => {
+    await open();
+    const env = { ...claimEnv(spied().db), ASSETS: pageAssets() };
+    expect((await send(env, "/")).status).toBe(302);
+    await t.env.DB.prepare("INSERT INTO admin_credentials (id, secret_hash, session_secret, created_at) VALUES (1, ?, ?, ?)")
+      .bind((await passwordEnv(t.env.DB)).ADMIN_PASSWORD_HASH, "s".repeat(43), "2026-10-05T10:00:00.000Z").run();
+    const res = await send(env, "/");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+    await t.env.DB.prepare("DELETE FROM admin_credentials").run();
+  });
+
+  it("does not redirect GET / when the site is not claimable, and reads auth_settings once for two requests in a row", async () => {
+    await open();
+    const { db, authReads } = spied();
+    const env = { ...d1Env(db), ASSETS: pageAssets() }; // a SETUP_CODE is set: state open, not claim
+    expect((await send(env, "/")).status).toBe(200);
+    expect(authReads()).toBe(1);
+    expect((await send(env, "/")).status).toBe(200);
+    expect(authReads()).toBe(1);
   });
 });

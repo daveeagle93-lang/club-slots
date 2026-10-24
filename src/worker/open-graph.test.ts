@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Window } from "happy-dom";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { pageTitle } from "../../public/branding.js";
+import { ageWindow } from "../server/auth/test-harness";
 import type { AppEnv } from "../server/env";
 import { saveSettings } from "../server/settings";
 import { insertBooking, insertBreak, insertEvent, createTestEnv, type TestEnv } from "../test/db";
@@ -12,7 +13,10 @@ import { SECURITY_HEADERS } from "./headers";
 import { formatLondonDate } from "./open-graph";
 
 let t: TestEnv;
-beforeAll(async () => { t = await createTestEnv(); });
+beforeAll(async () => {
+  t = await createTestEnv();
+  await ageWindow(t.env.DB, 31 * 60_000); // the first-run claim window is over, so GET / is the landing page and not a redirect to /setup
+});
 afterAll(async () => { await t.dispose(); });
 afterEach(() => { vi.restoreAllMocks(); });
 

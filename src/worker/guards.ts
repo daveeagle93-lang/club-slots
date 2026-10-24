@@ -49,8 +49,8 @@ export async function guardAdminPage(request: Request, env: AppEnv, deps?: AuthD
   const resolved = await adminAuthFor(env, deps);
   if ("error" in resolved) {
     console.error(`Admin auth is not configured: ${resolved.reason}`);
-    // A new deployment with no admin secret yet: the way forward is /setup, if its code is in place.
-    if (resolved.awaitingSetup && (await setupState(env)) === "open") {
+    // A new deployment with no admin secret yet: the way forward is /setup, if a code is in place or the claim window is open.
+    if (resolved.awaitingSetup && ["open", "claim"].includes(await setupState(env))) {
       return new Response(null, { status: 302, headers: { Location: "/setup", "Cache-Control": "no-store" } });
     }
     return plain(503, "Admin sign-in isn't set up.");

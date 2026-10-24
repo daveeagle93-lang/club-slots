@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  accessEnv, accessJwt, d1Env, jwksFetch, NOW, newAccessKey, ORIGIN, passwordEnv, TEST_PASSWORD, adminApp,
+  accessEnv, accessJwt, ageWindow, claimEnv, d1Env, jwksFetch, NOW, newAccessKey, ORIGIN, passwordEnv, TEST_PASSWORD, adminApp,
 } from "../server/auth/test-harness";
 import type { AppEnv } from "../server/env";
 import { createTestEnv, type TestEnv } from "../test/db";
@@ -103,16 +103,58 @@ describe("admin pages with credentials in D1", () => {
     }
   });
 
-  it("answers 503 text/plain, with no redirect, while there are no credentials and SETUP_CODE is missing or too short", async () => {
+  it("answers 503 text/plain, with no redirect, while there are no credentials and SETUP_CODE is too short", async () => {
     await clearRow();
-    for (const SETUP_CODE of [undefined, "short"]) {
+    for (const path of [...PAGES, "/admin/login"]) {
+      const { res, reached } = await visit(d1Env(t.env.DB, { SETUP_CODE: "short" }), path);
+      expect(res.status, path).toBe(503);
+      expect(res.headers.get("content-type")).toContain("text/plain");
+      expect(res.headers.get("location")).toBeNull();
+      expect(reached).toBe(false);
+    }
+  });
+
+  it("sends every page, the login pages included, to /setup while there is no SETUP_CODE, nothing is claimed and the window is open", async () => {
+    await clearRow();
+    await ageWindow(t.env.DB, 0);
+    for (const path of [...PAGES, "/admin/login", "/admin/login.html", "/admin/login.js"]) {
+      const { res, reached } = await visit(claimEnv(t.env.DB), path);
+      expect(res.status, path).toBe(302);
+      expect(res.headers.get("location"), path).toBe("/setup");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(reached, path).toBe(false);
+    }
+  });
+
+  it("answers 503 text/plain, with no redirect, once the window has run out with nothing claimed", async () => {
+    await clearRow();
+    await ageWindow(t.env.DB, 31 * 60_000);
+    try {
       for (const path of [...PAGES, "/admin/login"]) {
-        const { res, reached } = await visit(d1Env(t.env.DB, { SETUP_CODE }), path);
+        const { res, reached } = await visit(claimEnv(t.env.DB), path);
         expect(res.status, path).toBe(503);
         expect(res.headers.get("content-type")).toContain("text/plain");
         expect(res.headers.get("location")).toBeNull();
         expect(reached).toBe(false);
       }
+    } finally {
+      await ageWindow(t.env.DB, 0);
+    }
+  });
+
+  it("takes the normal signed-out flow once a secret has been made (claimed): login pages served, the rest to /admin/login", async () => {
+    await clearRow();
+    await ageWindow(t.env.DB, 0);
+    const hash = (await passwordEnv(t.env.DB)).ADMIN_PASSWORD_HASH!;
+    await t.env.DB.prepare("INSERT INTO admin_credentials (id, secret_hash, session_secret, created_at) VALUES (1, ?, ?, ?)")
+      .bind(hash, "s".repeat(43), "2026-10-05T10:00:00.000Z").run();
+    expect((await visit(claimEnv(t.env.DB), "/admin/login")).reached).toBe(true);
+    for (const path of PAGES) {
+      const { res, reached } = await visit(claimEnv(t.env.DB), path);
+      expect(res.status, path).toBe(302);
+      expect(res.headers.get("location"), path).toBe("/admin/login");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(reached, path).toBe(false);
     }
   });
 

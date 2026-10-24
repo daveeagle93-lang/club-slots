@@ -24,7 +24,7 @@ export interface SetupRead {
 export function setupNotReadyMessage(reason: "short_code" | "expired"): string {
   return reason === "short_code"
     ? "Setup isn't ready: SETUP_CODE must be at least 12 characters."
-    : "Setup is closed. The first-run window ended, so nobody can create an admin secret from the web any more. To reopen it, set `SETUP_CODE` as a Worker secret (any phrase of 12+ characters) and reload, or see [handover](../handover.md).";
+    : "Setup is closed. The first-run window ended, so nobody can create an admin secret from the web any more. To reopen it, set SETUP_CODE as a Worker secret (any phrase of 12 or more characters) and reload this page, or follow the handover guide (docs/handover.md in your copy of the project).";
 }
 
 /** SETUP_CODE trimmed the way a submitted code is, or null if it is missing or shorter than MIN_SETUP_CODE_LENGTH. */

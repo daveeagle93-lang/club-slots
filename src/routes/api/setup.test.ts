@@ -657,7 +657,7 @@ describe("the setup texts", () => {
   it("are one pair of exported strings", () => {
     expect(setupNotReadyMessage("short_code")).toBe("Setup isn't ready: SETUP_CODE must be at least 12 characters.");
     expect(setupNotReadyMessage("expired")).toBe(
-      "Setup is closed. The first-run window ended, so nobody can create an admin secret from the web any more. To reopen it, set `SETUP_CODE` as a Worker secret (any phrase of 12+ characters) and reload, or see [handover](../handover.md).",
+      "Setup is closed. The first-run window ended, so nobody can create an admin secret from the web any more. To reopen it, set SETUP_CODE as a Worker secret (any phrase of 12 or more characters) and reload this page, or follow the handover guide (docs/handover.md in your copy of the project).",
     );
   });
 });

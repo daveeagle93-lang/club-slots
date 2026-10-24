@@ -1,7 +1,7 @@
 import { noStore } from "../server/bookings";
 import type { AppEnv, RouteHandler } from "../server/env";
 import { plain } from "../server/http";
-import { setupState } from "../server/setup";
+import { claimOpenCached, readSetup, setupNotReadyMessage } from "../server/setup";
 import { serveWithTags } from "./open-graph";
 
 /** The static files (the ASSETS binding), or an error if the Worker is deployed without it. */
@@ -10,8 +10,24 @@ export const assets = (env: AppEnv): Fetcher => {
   return env.ASSETS;
 };
 
-/** "/": the landing page (public/index.html) with the club's title and link-preview tags written in. See open-graph.ts. */
-export const serveLandingPage: RouteHandler = ({ request, env }) => serveWithTags(assets(env), env.DB, request, "/", null);
+/**
+ * "/": the landing page (public/index.html) with the club's title and link-preview tags written in. See open-graph.ts.
+ * While the claim window is open, GET of exactly "/" goes to /setup instead, so the first visitor finds the claim page. HEAD
+ * and every other path are left alone, so a crawler or a link preview never triggers the read or sees the redirect.
+ */
+export const serveLandingPage: RouteHandler = async ({ request, env }) => {
+  if (request.method === "GET" && new URL(request.url).pathname === "/") {
+    let claimable = false;
+    try {
+      claimable = await claimOpenCached(env);
+    } catch (e) {
+      // The redirect is a convenience: a database error must not take the landing page down (the tags fall back the same way).
+      console.error("Setup state unavailable for /:", e instanceof Error ? e.message : "unknown error");
+    }
+    if (claimable) return new Response(null, { status: 302, headers: { Location: "/setup", ...noStore } });
+  }
+  return serveWithTags(assets(env), env.DB, request, "/", null);
+};
 
 /**
  * /e/<slug>: the event page, with the event's title and link-preview tags written in (generic ones for an unknown, invalid or
@@ -36,14 +52,14 @@ export const serveEventFallbackPage: RouteHandler = ({ request, env }) => {
 };
 
 /**
- * /setup: the first-run page (public/setup.html), only while setup is open (src/server/setup.ts). Fetched by its clean
- * URL without the visitor's conditional headers, so a cached copy can never answer once setup has closed, and sent no-store.
- * Closed is a plain 404; a missing or too-short SETUP_CODE gets a one-line explanation instead of the page.
+ * /setup: the first-run page (public/setup.html), while setup is open, claimable or claimed (src/server/setup.ts). Fetched by
+ * its clean URL without the visitor's conditional headers, so a cached copy can never answer once setup has closed, and sent
+ * no-store. Closed is a plain 404; a too-short SETUP_CODE or an expired window gets a one-line explanation instead of the page.
  */
 export const serveSetupPage: RouteHandler = async ({ request, env }) => {
-  const state = await setupState(env);
+  const { state, reason } = await readSetup(env);
   if (state === "closed") return plain(404, "Not found.");
-  if (state !== "open") return plain(503, "Setup isn't ready: set SETUP_CODE (a phrase of at least 12 characters) as a Worker secret, then reload this page.");
+  if (state === "not_ready") return plain(503, setupNotReadyMessage(reason!)); // a not_ready read always has a reason
   const page = await assets(env).fetch(new Request(new URL("/setup", request.url), { method: "GET" }));
   const out = new Response(page.body, page);
   for (const [name, value] of Object.entries(noStore)) out.headers.set(name, value);

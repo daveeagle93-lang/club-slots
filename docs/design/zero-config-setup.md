@@ -145,7 +145,7 @@ C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker
 
 ### 3.5 Wording
 
-- Expired with nothing claimed: "Setup is closed. The first-run window ended, so nobody can create an admin secret from the web any more. To reopen it, set `SETUP_CODE` as a Worker secret (any phrase of 12+ characters) and reload, or see [handover](../handover.md)." (This replaces the text at `src/worker/static.ts:46`, which today names only `SETUP_CODE`.)
+- Expired with nothing claimed: "Setup is closed. The first-run window ended, so nobody can create an admin secret from the web any more. To reopen it, set SETUP_CODE as a Worker secret (any phrase of 12 or more characters) and reload this page, or follow the handover guide (docs/handover.md in your copy of the project)." (This replaces the text at `src/worker/static.ts:46`, which today names only `SETUP_CODE`.)
 - Claim page, in plain words: "This site has no admin yet. Press the button to make your admin secret and a recovery code. Both are shown once. Save both in a password manager before you leave this page."
 
 ### 3.6 Recovery code and `/recover` (added at approval)
