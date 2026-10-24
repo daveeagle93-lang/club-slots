@@ -1,6 +1,6 @@
 # Zero-config setup: a first-run claim window instead of `SETUP_CODE`
 
-Status: **approved 21 October 2026, including the recovery code added in section 3.6 (C7, C8). No product code written yet. The Deploy button probe P1 was run on 22 October 2026 and passed (section 8); three design changes that followed from it are in section 3.7.** Written 21 October 2026 against `main` = `v1.1` (commit `f71189f`, migrations `0001` to `0018`).
+Status: **approved 21 October 2026, including the recovery code added in section 3.6 (C7, C8). The code is written on branch docs/zero-config-setup; the post-implementation Deploy run (section 8.2) is still to do. The Deploy button probe P1 was run on 22 October 2026 and passed (section 8); three design changes that followed from it are in section 3.7.** Written 21 October 2026 against `main` = `v1.1` (commit `f71189f`, migrations `0001` to `0018`).
 
 Goal: a non-technical organiser presses the Deploy button, accepts every default, deploys, opens their site and saves a password. The password sign-in stays the default. Cloudflare Access stays optional.
 

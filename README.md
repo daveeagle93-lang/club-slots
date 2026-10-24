@@ -23,6 +23,8 @@ Press the button and sign in to Cloudflare (a free account is enough). Cloudflar
 4. **Build command** (empty) and **Deploy command** (`npm run deploy`). Leave both.
 5. If Cloudflare shows a switch for Cloudflare Access or for preview builds, leave it off. Neither appeared on 22 October 2026.
 
+This is the form as expected after this change; the ADMIN_AUTH field is expected to be gone but has not been seen yet (**unverified**).
+
 Then press **Deploy**. It takes about a minute.
 
 If Cloudflare says your GitHub authorisation has expired, reinstall the Cloudflare GitHub app: [Cloudflare's instructions](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/github-integration/#reinstall-the-cloudflare-github-app).
@@ -36,7 +38,7 @@ Cloudflare does not show you your site's address when the deploy ends, so first 
 1. It is the `https://….workers.dev` line near the end of the build log.
 2. Or, in the Cloudflare dashboard, open **Workers & Pages**, then your Worker (it has the name you gave the project). Its page shows the address. These menu names are **unverified**: they will be checked on the next run.
 
-Open that address, not `/setup`. Then:
+Open that address, not `/setup`, for your first visit. Then:
 
 1. While the first-run window is open, the address takes you to a page that says the site has no admin yet. Press **Create my admin secret**.
 2. The page shows your **admin secret** (you sign in with it) and your **recovery code** (it makes a new secret if you lose this one). Both are shown **once**. Copy **both** into a password manager, ideally as two separate entries. Nobody can look them up for you later.
@@ -45,9 +47,9 @@ Open that address, not `/setup`. Then:
 
 Things to know:
 
-- **You have 30 minutes.** They count from when the database was created, not from your first visit, and a redeploy does not reopen them. A second visitor is refused ("This site has already been set up"). Until you first sign in, the same browser can ask for a new pair, which replaces the first.
+- **You have 30 minutes.** They count from when the database was created, not from your first visit, and a redeploy does not reopen them. A second visitor is refused ("This site has already been set up"). Until you first sign in, and within a day, the same browser can ask for a new pair, which replaces the first.
 - **Until you press the button, anyone who finds your site's address could press it first.** To rule that out, set `SETUP_CODE` as a Worker secret (any phrase of 12 or more characters) before your first visit. The 30 minutes then no longer apply and `/setup` asks for that phrase.
-- **After 30 minutes with no admin made,** the site says setup is closed. Set `SETUP_CODE` as above and reload `/setup`. [Handover](docs/handover.md#if-the-admin-secret-is-lost) has the other ways.
+- **After 30 minutes with no admin made,** your address just shows the ordinary home page ("No events are open for booking right now"). To see the closed message, add `/setup` to the address; it says setup is closed (opening `/admin` says sign-in isn't set up). Set `SETUP_CODE` as above and reload `/setup`. [Handover](docs/handover.md#if-the-admin-secret-is-lost) has the other ways.
 - **After your first sign-in,** `/setup` is closed for good.
 - **If you lose the admin secret,** use the recovery code on your site's `/recover` page. If you lose both, see [If the admin secret is lost](docs/handover.md#if-the-admin-secret-is-lost). More on problems: [Troubleshooting](docs/deploying.md#troubleshooting).
 

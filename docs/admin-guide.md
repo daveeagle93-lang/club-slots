@@ -30,7 +30,7 @@ There are two ways to sign in. Which one you have depends on how your club's sit
 
 A new site has no admin secret yet. You make it once, from the site's own address. You do not need a code to type.
 
-1. Open your site's address. (If you cannot find it, the [README](../README.md#first-run-setup) shows where.) On a new site this takes you to a page that says the site has no admin yet. Do this soon after the site is deployed: the page is open for 30 minutes.
+1. Open your site's address. (If you cannot find it, the [README](../README.md#first-run-setup) shows where.) On a new site this takes you to a page that says the site has no admin yet. Do this soon after the site is deployed: the page is open for 30 minutes. After that the address just shows the ordinary home page, and you need the steps below.
 2. Tap "Create my admin secret".
 3. The page shows two long strings of letters and numbers: your **admin secret** and your **recovery code**. Each is shown only this once, and the site keeps only a scrambled copy that can't be turned back into it. Tap "Copy admin secret" and save it in your password manager now. Then tap "Copy recovery code" and save that too, ideally as a separate entry.
 4. Tick "I've saved both".
@@ -42,7 +42,7 @@ The 30 minutes count from when the site was first built, not from when you open 
 
 Until your first successful sign-in, the browser that pressed the button can make a new pair, and the old pair stops working. After your first sign-in the setup page goes for good, and opening it shows "Not found." You can't make another secret from it.
 
-If the page says "Setup is closed", nobody made the admin secret within the 30 minutes. Ask whoever looks after the site's setup to reopen it, using [If the admin secret is lost](handover.md#if-the-admin-secret-is-lost). If your site was set up with a setup code, the page asks for it instead of showing the button, and a wrong code gives "That setup code isn't right." After a few tries you see "Too many attempts. Try again in" some minutes. If the page says "Setup isn't ready", the setup code is too short, so ask whoever deployed the site.
+If the page says "Setup is closed", nobody made the admin secret within the 30 minutes. (After the 30 minutes your site's address shows the ordinary home page. To see this message, add /setup to the end of the address; opening /admin says "Admin sign-in isn't set up.") Ask whoever looks after the site's setup to reopen it, using [If the admin secret is lost](handover.md#if-the-admin-secret-is-lost). If your site was set up with a setup code, the page asks for it instead of showing the button, and a wrong code gives "That setup code isn't right." After a few tries you see "Too many attempts. Try again in" some minutes. If the page says "Setup isn't ready", the setup code is too short, so ask whoever deployed the site.
 
 ### The password screen
 
@@ -90,7 +90,7 @@ If you saved your recovery code, you can make a new admin secret yourself:
 2. Type or paste the recovery code and tap "Continue".
 3. The page shows a new admin secret and a new recovery code, once. Save both, as in "The first time" above. The old secret and the old recovery code stop working, and anyone signed in with the old secret is signed out.
 
-After 5 wrong tries from the same place you see "Too many attempts. Try again later." Wait and try again. If the page says "Not found", the site has no recovery code (a site set up on an earlier version has none), so ask whoever looks after the site's setup. If you lose the recovery code too, ask them as well: they can find the steps in [handover.md](handover.md#if-the-admin-secret-is-lost), section "If the admin secret is lost".
+After 5 wrong tries from the same place you see "Too many attempts. Try again in N minutes." (with a number in place of N). Wait that long and try again. If the page says "Not found", the site has no recovery code (a site set up on an earlier version has none), so ask whoever looks after the site's setup. If you lose the recovery code too, ask them as well: they can find the steps in [handover.md](handover.md#if-the-admin-secret-is-lost), section "If the admin secret is lost".
 
 ## 2. Club settings and branding
 

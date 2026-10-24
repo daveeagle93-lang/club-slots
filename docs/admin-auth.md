@@ -82,7 +82,7 @@ Rules for the code:
 **Recovery.** `/recover` is a page on the site where the recovery code makes a new admin secret and a new recovery code. It works at any time, with or without the window, and the old secret and the old recovery code then stop working. Every session made with the old secret stops too, because a new session secret is made. It answers 404 when:
 
 - the site has no stored recovery code (an admin secret made before this version has none, and neither does a site whose recovery hash was cleared), or
-- `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret. They override the stored credentials, so there is nothing for `/recover` to replace. Delete those secrets first, or use the database statement in [handover.md](handover.md#if-the-admin-secret-is-lost).
+- `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret. They override the stored credentials, so there is nothing for `/recover` to replace. `/setup` stays closed for them too. Delete those two secrets first (or, to keep using them, change them as described under "Setting the secrets by hand" below).
 
 A wrong code gets 401 "That recovery code isn't right." Attempts are limited to 5 per 15 minutes per client, counted before the check, and there is **no** cap across all clients, on purpose: a global one would let anyone block the owner from the one route meant for the worst day (see "Known limits"). A recovery code can be used once. Using it makes the next one, and of two simultaneous uses of the same code one gets 409 "That recovery code has already been used."
 
@@ -244,8 +244,15 @@ With `ADMIN_AUTH=access` in the settings, the first time an admin signs in throu
 
 1. Deploy the new code with the `ADMIN_AUTH` line still in your own `wrangler.jsonc`. The template no longer has any `vars`, so an update shows a conflict on that line: keep yours.
 2. Sign in once through Cloudflare Access. This first sign-in records the Access settings in the database (the mode is "pinned").
-3. Check that `/api/admin/session` shows provider `access`.
-4. Only then remove the `ADMIN_AUTH` line.
+3. Check that `/api/admin/session` shows provider `access`. This only shows that the site is on Access: it says `access` even if saving the pin failed (the route logs a failed pin and carries on).
+4. Open an admin page (the admin pages call the session endpoint, and that call is what saves the pin). Then, in the D1 console, run the decisive check and expect `access` and `import`:
+
+   ```sql
+   SELECT mode, changed_by FROM auth_settings WHERE id = 1;
+   ```
+
+   From a terminal in the project folder: `npx wrangler d1 execute DB --remote --env="" --command "SELECT mode, changed_by FROM auth_settings WHERE id = 1;"`.
+5. Only when that shows `access` / `import`, remove the `ADMIN_AUTH` line.
 
 Removing the line before that first sign-in drops the site back to password mode, with the old admin secret valid again.
 
@@ -261,6 +268,8 @@ Because an unset or `password` `ADMIN_AUTH` leaves the stored mode in charge, se
   ```
 
   This returns to the password sign-in with whatever admin secret is stored. If there is none, or it is lost, follow with the steps in [handover.md](handover.md#if-the-admin-secret-is-lost).
+
+If Access itself is why you are leaving, also remove the Access application, or its paths, in Zero Trust: the application in front of `/admin*` and `/api/admin*` (if any) still sits in front of the custom domain after the mode is switched. This is how Cloudflare Access behaves, not something this code does (**unverified**).
 
 ### What `workers.dev` does under Access
 

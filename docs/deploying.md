@@ -38,12 +38,13 @@ There is nothing to decide or type beforehand: the form has no password or code 
    - The **database** (`DB`) is made for you: leave "Create new" and the suggested name, location hint and read-replication checkbox. The description shown is the one in `package.json`: "Your club's booking database. Cloudflare creates it for you, so the suggested name is fine."
    - **Build command** is empty and **Deploy command** is `npm run deploy`: leave both.
    - There is no secret or password field. If the form shows a switch for Cloudflare Access or for preview builds, leave it off; neither appeared on 22 October 2026.
+   - This is the form as expected after this change; the ADMIN_AUTH field is expected to be gone but has not been seen yet (**unverified**).
 5. **Deploy.** Cloudflare creates the database and replaces the placeholder database id in your copy of `wrangler.jsonc`, then builds the copy with Workers Builds. That runs `npm run deploy`, which applies all 19 migrations to the database through its `DB` binding and publishes the Worker. Wait for it to finish; the trial run took about 45 seconds. The last migration starts your 30-minute first-run window (see below). Both scripts pass `--env=""`, which targets the top-level environment explicitly: without it Wrangler warned that several environments are defined and none was chosen (`env.preview` exists). A dry run of the current scripts shows no such warning.
 6. **Find your site's address.** Cloudflare does not show it when the deploy ends. In this order:
    1. It is the `https://….workers.dev` line near the end of the build log.
    2. Or, in the Cloudflare dashboard, open **Workers & Pages**, then your Worker (named as you named the project). Its page shows the address. These menu names are **unverified**: check on the next run and correct this. A new account may have to pick a `workers.dev` subdomain first: also unverified.
 
-   Open that address, not `/setup`.
+   Open that address, not `/setup`, for your first visit. Once the 30 minutes have run out, the address just shows the ordinary home page; add `/setup` to it to see the closed message and the ways to reopen (or open `/admin`, which says sign-in isn't set up).
 7. **Make your admin secret and recovery code.** While the first-run window is open, your address takes you to a page that says the site has no admin yet. Then:
    1. Press **Create my admin secret**.
    2. The page shows your **admin secret** (43 characters) and your **recovery code** (43 characters), **once**. Press **Copy admin secret** and **Copy recovery code** and paste each into a password manager now, ideally as two separate entries.
@@ -54,14 +55,14 @@ What to know about the first run:
 
 - **The window is 30 minutes, counted from when the database was created** (the last migration in the build), not from your first visit. A redeploy does not reopen it.
 - **Only the button creates anything.** Opening the page, or a link checker or preview fetching your address, creates nothing.
-- A second visitor is refused with "This site has already been set up". Until you first sign in, the browser that pressed the button can press again to **replace** the pair: the old secret and the old recovery code then stop working.
+- A second visitor is refused with "This site has already been set up". Until you first sign in, and within a day, the browser that pressed the button can press again to **replace** the pair: the old secret and the old recovery code then stop working.
 - **Until you press the button, anyone who finds your site's address within the 30 minutes can press it first.** To close that gap, set `SETUP_CODE` as a Worker secret (any phrase of 12 or more characters) before your first visit. The window is then off and `/setup` asks for that phrase, as in v1.1.
 - It works only on a password-provider site and only while no admin has signed in yet. Under Cloudflare Access, `/setup` is closed (404).
 - If you open an admin page while the window is open and nobody has pressed the button, it sends you to `/setup`.
 - After the first successful sign-in `/setup` is closed for good (404).
 - With `SETUP_CODE` set, the code form is limited to 5 attempts per 15 minutes per visitor (every attempt counts), the code is compared in constant time, and the page accepts same-origin requests only. The button has no such limit, because there is nothing to guess.
 - Only hashes are stored: the admin secret's in `admin_credentials` and the recovery code's in `auth_settings`. If you lose the secret, use the recovery code on your site's `/recover` page; if you lose both, see [If the admin secret is lost](handover.md#if-the-admin-secret-is-lost).
-- If nobody pressed the button within the 30 minutes, the page says setup is closed. See [Troubleshooting](#troubleshooting).
+- If nobody pressed the button within the 30 minutes, your address shows the ordinary home page ("No events are open for booking right now"), `/admin` says "Admin sign-in isn't set up.", and `/setup` says setup is closed. See [Troubleshooting](#troubleshooting).
 
 ## Check that it works
 
@@ -239,7 +240,7 @@ I upgraded a v1.0 preview database (2 events, 5 bookings) with `wrangler d1 migr
 
 v1.1 (migrations up to `0018`) asked for a `SETUP_CODE` on the Deploy form. This version (migration `0019`) does not, and the template's `wrangler.jsonc` no longer has a `vars` block. Updating works as described above. What changes for you:
 
-- **Keep your own `vars`.** The template no longer sets `ADMIN_AUTH`, so if your copy has a `vars` block, merging the template shows a conflict on that line. Keep yours; nothing else changes. A password-mode site can delete the line or keep it: both work.
+- **Keep your own `vars`.** The template no longer sets `ADMIN_AUTH`. If you changed the `vars` line (for Access, say), merging the template shows a conflict on it: keep your version. Nothing else changes. A password-mode site can delete the line or keep it: both work.
 - **A site whose admin has signed in, or that has `SETUP_CODE` set, is unaffected.** It behaves as before, and the first-run window is irrelevant to it.
 - **A site with no admin and no `SETUP_CODE`** (one that today answers "Admin sign-in isn't set up." on every admin page) gets a 30-minute first-run window when the migration runs. Open its address within 30 minutes to make the admin secret and recovery code as in step 7 above; after that, set `SETUP_CODE` to reopen it.
 - **A site made on v1.1 that has signed in has no recovery code.** It keeps whatever recovery it has today: its `SETUP_CODE`, or the D1 console ([handover.md](handover.md#if-the-admin-secret-is-lost)). A recovery code exists only for an admin secret made on this version's `/setup`.
@@ -248,8 +249,14 @@ v1.1 (migrations up to `0018`) asked for a `SETUP_CODE` on the Deploy form. This
 
 1. Deploy the new code with `"vars": { "ADMIN_AUTH": "access" }` still in your own `wrangler.jsonc` (with your `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`).
 2. Sign in once through Cloudflare Access. This first sign-in records the Access settings in the database (the mode is "pinned").
-3. Check that `/api/admin/session` shows provider `access`.
-4. Only then remove the `ADMIN_AUTH` line.
+3. Check that `/api/admin/session` shows provider `access`. This only shows that the site is on Access: it says `access` even if saving the pin failed.
+4. Open an admin page (the admin pages call the session endpoint, and that call is what saves the pin). Then, in the D1 console, or from a terminal in the project folder, run the decisive check and expect `access` and `import`:
+
+   ```sh
+   npx wrangler d1 execute DB --remote --env="" --command "SELECT mode, changed_by FROM auth_settings WHERE id = 1;"
+   ```
+
+5. Only when that shows `access` / `import`, remove the `ADMIN_AUTH` line.
 
 Removing the line **before** that first sign-in drops the site back to password mode, with the old admin secret valid again. A site that has never had an admin sign in through Access is not protected against losing the line. Once pinned, the site stays on Access without the line, and editing the line back to `password` does not leave Access either; the ways out are in [handover.md](handover.md).
 
@@ -259,7 +266,9 @@ I have not run this upgrade on a deployed copy.
 
 ### `/setup` says "Setup is closed. The first-run window ended"
 
-Nobody pressed **Create my admin secret** within 30 minutes of the database being created, and no `SETUP_CODE` is set, so no admin secret can be made from the web any more. (A 503. An admin page says "Admin sign-in isn't set up." for the same reason.) Reopen it in one of two ways:
+Once the 30 minutes have run out, your site's address itself just shows the ordinary home page, so add `/setup` to it to see this message.
+
+The cause: nobody pressed **Create my admin secret** within 30 minutes of the database being created, and no `SETUP_CODE` is set, so no admin secret can be made from the web any more. (A 503. An admin page says "Admin sign-in isn't set up." for the same reason.) Reopen it in one of two ways:
 
 - Set `SETUP_CODE` as a Worker secret (any phrase of 12 or more characters), then reload `/setup` and type that phrase. In the dashboard: the Worker, then **Settings**, then **Variables and Secrets**, and add a secret named `SETUP_CODE` (menu names **unverified**). Or in a terminal, in the project folder: `npx wrangler secret put SETUP_CODE`.
 - Or run the reopen statement below in the D1 console. It starts a new 30-minute window.
@@ -282,7 +291,7 @@ The Worker's logs may also be in the dashboard: **unverified**.
 
 ### `/setup` says "This site has already been set up"
 
-Someone, probably you, has already pressed **Create my admin secret** (or made a secret with the code), and nobody has signed in yet. If you pressed it, sign in at `/admin/login` with the admin secret you saved. If you did it in the browser you still have, open `/setup` there to get a new pair.
+Someone, probably you, has already pressed **Create my admin secret** (or made a secret with the code), and nobody has signed in yet. If you pressed it, sign in at `/admin/login` with the admin secret you saved. If you did it in the browser you still have, open `/setup` there, within a day, to get a new pair.
 
 If you **never saw your admin secret** (the connection dropped, say), or you think someone else pressed the button first, take the site back: set `SETUP_CODE` as a Worker secret (any phrase of 12 or more characters) and reload `/setup`, or run the reopen statement below.
 
@@ -305,7 +314,7 @@ If your site is on Cloudflare Access and you need to get back to the password si
 
 ### `/recover` says "Not found"
 
-`/recover` answers "Not found" if the site has no stored recovery code (an admin secret made before this version has none), or if `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret: they override the stored credentials, so there is nothing for `/recover` to replace. Delete those secrets first, or use the reopen statement above.
+`/recover` answers "Not found" if the site has no stored recovery code (an admin secret made before this version has none), or if `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret: they override the stored credentials, so there is nothing for `/recover` to replace (and `/setup` stays closed for them too). Delete those two secrets first (or, to keep using them, change them as described under "Override" in [handover.md](handover.md#changing-the-admin-secret-or-signing-everyone-out)).
 
 If your site is on Cloudflare Access with an `ADMIN_AUTH` = `access` line in its settings, remove that line **first** and then use `/recover`; otherwise the next Access sign-in puts the Access mode back and undoes the recovery. `/recover` says so when it detects the setting.
 
@@ -348,7 +357,7 @@ The database probably lacks a migration. Run `npm run db:migrations:apply` (or `
 
 ### Local development: `/setup` 404s
 
-The local database's 30-minute window may have ended: check `.dev.vars` has `SETUP_CODE` of 12 or more characters. Also check that neither `ADMIN_PASSWORD_HASH` nor `ADMIN_SESSION_SECRET` is set there (setting either turns `/setup` off) and that `ADMIN_AUTH`, if set, is `password`.
+`/setup` answers 404 when setup is closed. Check that neither `ADMIN_PASSWORD_HASH` nor `ADMIN_SESSION_SECRET` is set there (setting either turns `/setup` off) and that `ADMIN_AUTH`, if set, is `password`. If it answers 503 "Setup is closed" instead, the local database's 30-minute window has ended: check `.dev.vars` has `SETUP_CODE` of 12 or more characters.
 
 ## Before a real event
 

@@ -1,6 +1,6 @@
 // The admin credentials kept in D1 (migration 0013), used when neither ADMIN_PASSWORD_HASH nor ADMIN_SESSION_SECRET
-// is set. One row at most. Every write is a single statement guarded by `first_login_at`, so that setup (which may
-// replace the credentials) and the first sign-in (which closes setup) cannot both win.
+// is set. One row at most. Every write to it is guarded by `first_login_at` (saveCredentials also writes auth_settings, in
+// the same batch), so that setup (which may replace the credentials) and the first sign-in (which closes setup) cannot both win.
 
 export interface StoredCredentials {
   secretHash: string;
