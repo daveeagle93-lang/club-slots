@@ -43,7 +43,7 @@ export const serveEventFallbackPage: RouteHandler = ({ request, env }) => {
 export const serveSetupPage: RouteHandler = async ({ request, env }) => {
   const state = await setupState(env);
   if (state === "closed") return plain(404, "Not found.");
-  if (state === "not_ready") return plain(503, "Setup isn't ready: set SETUP_CODE (a phrase of at least 12 characters) as a Worker secret, then reload this page.");
+  if (state !== "open") return plain(503, "Setup isn't ready: set SETUP_CODE (a phrase of at least 12 characters) as a Worker secret, then reload this page.");
   const page = await assets(env).fetch(new Request(new URL("/setup", request.url), { method: "GET" }));
   const out = new Response(page.body, page);
   for (const [name, value] of Object.entries(noStore)) out.headers.set(name, value);

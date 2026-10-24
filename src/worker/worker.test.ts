@@ -565,7 +565,7 @@ describe("first-run setup through the Worker", () => {
     await reset();
     const full = await passwordEnv(t.env.DB);
     const { seen, fetcher } = recordingAssets();
-    for (const e of [{ ...full, SETUP_CODE }, d1Env(t.env.DB, { ADMIN_AUTH: "access" }), d1Env(t.env.DB, { ADMIN_AUTH: undefined }), d1Env(t.env.DB, { ADMIN_PASSWORD_HASH: full.ADMIN_PASSWORD_HASH })]) {
+    for (const e of [{ ...full, SETUP_CODE }, d1Env(t.env.DB, { ADMIN_AUTH: "access" }), d1Env(t.env.DB, { ADMIN_PASSWORD_HASH: full.ADMIN_PASSWORD_HASH })]) {
       const res = await send({ ...e, ASSETS: fetcher }, "/setup");
       expect(res.status, String(e.ADMIN_AUTH)).toBe(404);
       expect(res.headers.get("cache-control")).toBe("no-store");

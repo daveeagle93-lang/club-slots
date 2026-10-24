@@ -283,7 +283,7 @@ describe("POST /api/setup: when it is not open", () => {
     const full = await passwordEnv(t.env.DB);
     for (const e of [
       full, d1Env(t.env.DB, { ADMIN_PASSWORD_HASH: full.ADMIN_PASSWORD_HASH }), d1Env(t.env.DB, { ADMIN_SESSION_SECRET: full.ADMIN_SESSION_SECRET }),
-      d1Env(t.env.DB, { ADMIN_AUTH: "access" }), d1Env(t.env.DB, { ADMIN_AUTH: undefined }), d1Env(t.env.DB, { ADMIN_AUTH: "Password" }),
+      d1Env(t.env.DB, { ADMIN_AUTH: "access" }), d1Env(t.env.DB, { ADMIN_AUTH: "Password" }),
     ]) {
       const res = await post(SETUP_CODE, { env: { ...e, SETUP_CODE } });
       expect(res.status, JSON.stringify(e.ADMIN_AUTH)).toBe(404);

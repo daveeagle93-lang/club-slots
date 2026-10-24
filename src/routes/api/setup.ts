@@ -26,7 +26,7 @@ const notFound = (): Response => errorResponse(404, "not_found", "Not found.", {
 export const createSetupHandler = (deps: AuthDeps = {}): RouteHandler => async ({ request, env }) => {
   const state = await setupState(env);
   if (state === "closed") return notFound();
-  if (state === "not_ready") {
+  if (state !== "open") { // not_ready, and (until the claim flow exists) claim and claimed
     return errorResponse(503, "setup_not_ready", "Setup isn't ready: set SETUP_CODE to a phrase of at least 12 characters.", {}, noStore);
   }
   if (!hasSameOrigin(request)) return errorResponse(403, "csrf_failed", "That request was refused. Reload the page and try again.", {}, noStore);
