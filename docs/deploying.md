@@ -357,7 +357,7 @@ The database probably lacks a migration. Run `npm run db:migrations:apply` (or `
 
 ### Local development: `/setup` 404s
 
-`/setup` answers 404 when setup is closed. Check that neither `ADMIN_PASSWORD_HASH` nor `ADMIN_SESSION_SECRET` is set there (setting either turns `/setup` off) and that `ADMIN_AUTH`, if set, is `password`. If it answers 503 "Setup is closed" instead, the local database's 30-minute window has ended: check `.dev.vars` has `SETUP_CODE` of 12 or more characters.
+`/setup` answers 404 when setup is closed. Check that neither `ADMIN_PASSWORD_HASH` nor `ADMIN_SESSION_SECRET` is set in `.dev.vars` (setting either turns `/setup` off) and that `ADMIN_AUTH`, if set, is `password`. If it answers 503 "Setup is closed" instead, the local database's 30-minute window has ended: check `.dev.vars` has `SETUP_CODE` of 12 or more characters.
 
 ## Before a real event
 

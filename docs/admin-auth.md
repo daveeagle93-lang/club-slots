@@ -242,7 +242,7 @@ With `ADMIN_AUTH=access` in the settings, the first time an admin signs in throu
 
 **A site that has never had an admin sign in through Access is not pinned,** and is not protected against losing the line. Without the line it falls back to the password sign-in, and an admin secret made before the switch, still in the database, is accepted again. So when you move an existing site that has `"vars": { "ADMIN_AUTH": "access" }` in its own `wrangler.jsonc`, do these in this order:
 
-1. Deploy the new code with the `ADMIN_AUTH` line still in your own `wrangler.jsonc`. The template no longer has any `vars`, so an update shows a conflict on that line: keep yours.
+1. Deploy the new code with the `ADMIN_AUTH` line still in your own `wrangler.jsonc`. The template no longer sets `ADMIN_AUTH`. If you changed that `vars` line (for Access), merging the template shows a conflict on it: keep yours.
 2. Sign in once through Cloudflare Access. This first sign-in records the Access settings in the database (the mode is "pinned").
 3. Check that `/api/admin/session` shows provider `access`. This only shows that the site is on Access: it says `access` even if saving the pin failed (the route logs a failed pin and carries on).
 4. Open an admin page (the admin pages call the session endpoint, and that call is what saves the pin). Then, in the D1 console, run the decisive check and expect `access` and `import`:
