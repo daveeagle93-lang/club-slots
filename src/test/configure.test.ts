@@ -339,15 +339,15 @@ describe("renderConfig / isGenerated", () => {
     expect(out.d1_databases[0].database_name).toBe("slot-booker-db");
   });
 
-  it("keeps the committed template's own vars, and lets account vars override them per environment", () => {
+  it("adds no vars to the committed template unless the account has some, and sets them per environment", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const template = rawConfig as Record<string, any>;
-    expect(template.vars).toEqual({ ADMIN_AUTH: "password" });
-    expect(template.env.preview.vars).toEqual({ ADMIN_AUTH: "password" });
+    expect(template.vars).toBeUndefined();
+    expect(template.env.preview.vars).toBeUndefined();
 
     const plain = buildConfig(template, ok(good));
-    expect(plain.vars).toEqual({ ADMIN_AUTH: "password" });
-    expect(plain.env.preview.vars).toEqual({ ADMIN_AUTH: "password" });
+    expect(plain.vars).toBeUndefined();
+    expect(plain.env.preview.vars).toBeUndefined();
 
     const mine = buildConfig(template, ok({
       ...good,
@@ -355,6 +355,6 @@ describe("renderConfig / isGenerated", () => {
       productionVars: { ADMIN_AUTH: "access", ACCESS_AUD: "aud" },
     }));
     expect(mine.vars).toEqual({ ADMIN_AUTH: "access", BOOKING_CUTOFF_OFFSET_MINUTES: "-30", ACCESS_AUD: "aud" });
-    expect(mine.env.preview.vars).toEqual({ ADMIN_AUTH: "password", BOOKING_CUTOFF_OFFSET_MINUTES: "-30" });
+    expect(mine.env.preview.vars).toEqual({ BOOKING_CUTOFF_OFFSET_MINUTES: "-30" });
   });
 });

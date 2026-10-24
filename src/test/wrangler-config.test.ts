@@ -57,6 +57,10 @@ it("sets workers_dev explicitly to true at the top level", () => {
   expect(config().workers_dev).toBe(true);
 });
 
+it("has no ADMIN_AUTH variable in production or preview", () => {
+  for (const env of [undefined, "preview"]) expect(config(env).vars?.ADMIN_AUTH, String(env)).toBeUndefined();
+});
+
 it("does not publish test files from public/ as static assets", () => {
   const ignore = readFileSync(join(import.meta.dirname, "../../public/.assetsignore"), "utf8").split("\n").map((l) => l.trim());
   expect(ignore).toContain("*.test.ts");

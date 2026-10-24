@@ -73,9 +73,10 @@ describe("wrangler.jsonc as the button reads it", () => {
     expect(dbOf("preview")?.database_id).not.toBe(dbOf()?.database_id);
   });
 
-  it("starts a fresh deployment on the password sign-in, in production and in preview (vars are not inherited)", () => {
-    expect(config().vars).toEqual({ ADMIN_AUTH: "password" });
-    expect(config("preview").vars).toEqual({ ADMIN_AUTH: "password" });
+  it("has no plain variables, so the form shows none", () => {
+    // Wrangler fills an absent vars in as {}; configure.test.ts checks the raw file has no vars key at all.
+    expect(config().vars).toEqual({});
+    expect(config("preview").vars).toEqual({});
   });
 });
 

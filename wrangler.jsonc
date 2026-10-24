@@ -29,10 +29,9 @@
   // Explicit, so Wrangler does not warn that workers_dev is missing and the button's workers.dev URL keeps working.
   // Set it to false once a custom domain serves the site (docs/admin-auth.md).
   "workers_dev": true,
-  // A fresh deployment signs admins in with a password. Anyone using Cloudflare Access changes ADMIN_AUTH (and adds
-  // ACCESS_TEAM_DOMAIN and ACCESS_AUD) in their own copy of this file, or as docs/admin-auth.md describes.
-  // Values here overwrite ones set in the Cloudflare dashboard on every deploy. vars is not inherited by env.preview.
-  "vars": { "ADMIN_AUTH": "password" },
+  // A fresh site needs no variable: it signs admins in with a password. There is no "vars" here on purpose, because the
+  // Deploy form would show every entry as an editable field. Anyone using Cloudflare Access adds
+  // "vars": { "ADMIN_AUTH": "access" } (plus ACCESS_TEAM_DOMAIN and ACCESS_AUD) to their own copy of this file.
   "d1_databases": [
     {
       "binding": "DB",
@@ -45,7 +44,6 @@
   ],
   "env": {
     "preview": {
-      "vars": { "ADMIN_AUTH": "password" },
       "d1_databases": [
         {
           "binding": "DB",
