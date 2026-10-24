@@ -19,7 +19,8 @@ export async function loadCredentials(db: D1Database): Promise<StoredCredentials
  * Stores the credentials made on /setup, replacing earlier ones, in one statement that does nothing once the first
  * sign-in is recorded. False means it did nothing (setup has just been closed by a sign-in). When it does write, the
  * same batch revokes the claim token (so a stale claim cookie cannot overwrite these credentials) and, with
- * `recoveryHash`, stores that too; both only if the credentials written are this caller's.
+ * `recoveryHash`, stores that too; both only if the credentials written are this caller's. Throws if `recoveryHash` could not
+ * be stored (no auth_settings row), so a recovery code that was not stored is never shown.
  */
 export async function saveCredentials(
   db: D1Database,
@@ -33,14 +34,17 @@ export async function saveCredentials(
   ).bind(secretHash, sessionSecret, createdAt);
   // The salted secret hash proves the row above is this caller's; a closed or lost setup leaves auth_settings alone.
   const guard = "WHERE id = 1 AND EXISTS (SELECT 1 FROM admin_credentials WHERE secret_hash = ? AND first_login_at IS NULL)";
-  const [saved] = await db.batch([
+  const [saved, settings] = await db.batch([
     upsert,
     recoveryHash === undefined
       ? db.prepare(`UPDATE auth_settings SET claim_token_hash = NULL ${guard}`).bind(secretHash)
       : db.prepare(`UPDATE auth_settings SET claim_token_hash = NULL, recovery_hash = ?, recovery_created_at = ? ${guard}`)
         .bind(recoveryHash, createdAt, secretHash),
   ]);
-  return saved.results.length > 0;
+  if (saved.results.length === 0) return false;
+  // The credentials are in, so the guard held: no change means there is no auth_settings row, and a recovery code the caller is about to show would be unusable.
+  if (recoveryHash !== undefined && settings.meta.changes === 0) throw new Error("auth_settings row is missing");
+  return true;
 }
 
 /**

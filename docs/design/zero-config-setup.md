@@ -116,7 +116,7 @@ INSERT INTO auth_settings (id, setup_opened_at) VALUES (1, strftime('%Y-%m-%dT%H
 | `SETUP_CODE` set and 12+ characters | `open` (v1.1, unchanged) | page asks for the code | code flow, unchanged | 302 to `/setup` |
 | `SETUP_CODE` set but too short | `not_ready` | 503, as today | 503 | 503 |
 | No `SETUP_CODE`, no `admin_credentials` row, within the window | **`claim`** | page with one button | claim (3.3) | 302 to `/setup`; `/` too (3.4) |
-| No `SETUP_CODE`, a row exists, `first_login_at` empty | **`claimed`** | with the claim cookie: page offers a new secret. Without it: "This site has already been set up. Sign in." | with the cookie: replace the secret. Without: 403 | `/admin/login` |
+| No `SETUP_CODE`, a row exists, `first_login_at` empty | **`claimed`** | with the claim cookie: page offers a new secret. Without it: "This site has already been set up. Sign in." | with the cookie: replace the secret. Without: 409 | `/admin/login` |
 | No `SETUP_CODE`, no row, window expired | `not_ready` | 503 with new wording (3.5) | 503 | 503 |
 
 C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker secret away and every existing deployment is untouched. The cost is that "code **and** window" is not offered; that would mean explaining two ways in.
@@ -124,7 +124,7 @@ C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker
 ### 3.3 The claim
 
 - `GET /setup` in state `claim` serves a page that says what is about to happen and has one button, "Create my admin secret". **Nothing is created by a GET** (C5). `GET /` and `GET /admin` only redirect.
-- The button sends `POST /api/setup` with an empty body. The handler, in order: state is `claim`; same-origin (`hasSameOrigin`); then one atomic statement:
+- The button sends `POST /api/setup` with a `{}` JSON body. The handler, in order: state is `claim`; same-origin (`hasSameOrigin`); then one atomic statement:
 
   ```sql
   INSERT INTO admin_credentials (id, secret_hash, session_secret, created_at)
@@ -222,7 +222,7 @@ The owner's requirement: the sign-in mode is stored in D1, and the env variable 
 4. **Claim cookie.** Only the browser that claimed can ask for a replacement.
 5. **Opt-out.** Set `SETUP_CODE` before the first visit and the window is off (C3). Anyone worried about the risk keeps v1.1's behaviour. The README says how, in one line.
 6. **Visibility.** The owner sees a failure at once. I propose to also show the claim time on the first admin page ("Admin secret created on <time>") so an attacker's early claim shows even to an owner who signs in with a stolen-then-reused secret. That needs a column; **not in this design, offered as a possible extra.**
-7. **No leakage in the redirect.** Only `/` (GET/HEAD) and the admin pages redirect, `no-store`. The public API and event pages are untouched.
+7. **No leakage in the redirect.** Only `/` (GET/HEAD) and the admin pages redirect, `no-store`. The public API and event pages are untouched. GET /api/setup is a new public read-only status route; it says which form to show and nothing more than /setup itself shows.
 
 **What this does not fix.** An attacker who is already watching the account's `workers.dev` address and reacts within the window still wins a race the owner is not aware of. That is the price of "no code to type". Mitigation 5 exists for them.
 

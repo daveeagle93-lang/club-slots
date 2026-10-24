@@ -414,6 +414,21 @@ describe("POST /api/setup: the code flow also makes a recovery code", () => {
     expect(await verifyAdminSecret(secret, parseAdminSecretHash(settings.recovery_hash!)!)).toBe(false);
   });
 
+  it("the code flow answers 500 and returns no secret or recovery code when the auth_settings row is missing", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    await t.env.DB.prepare("DELETE FROM auth_settings WHERE id = 1").run();
+    try {
+      const res = await post(SETUP_CODE);
+      expect(res.status).toBe(500);
+      const text = JSON.stringify(await res.json());
+      expect(text).toContain("internal_error");
+      expect(text).not.toMatch(/[A-Za-z0-9_-]{43}/);
+      expect(log.mock.calls.flat().map(String)).toEqual(["setup failed:", "auth_settings row is missing"]);
+    } finally {
+      await t.env.DB.prepare("INSERT INTO auth_settings (id, setup_opened_at) VALUES (1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))").run();
+    }
+  });
+
   it("replaces the recovery code when it is run again", async () => {
     const first = ((await (await post(SETUP_CODE)).json()) as { recoveryCode: string }).recoveryCode;
     const second = ((await (await post(SETUP_CODE)).json()) as { recoveryCode: string }).recoveryCode;

@@ -88,6 +88,30 @@ describe("saveCredentials", () => {
   });
 });
 
+describe("saveCredentials with a recovery hash and no auth_settings row", () => {
+  it("saveCredentials with a recovery hash throws when the auth_settings row is missing", async () => {
+    await t.env.DB.prepare("DELETE FROM auth_settings WHERE id = 1").run();
+    try {
+      const recoveryHash = await hashAdminSecret(generateAdminSecret());
+      const error = await saveCredentials(t.env.DB, { secretHash: H1, sessionSecret: S1, createdAt: T1, recoveryHash }).then(() => null, (e: unknown) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("auth_settings row is missing");
+      expect((error as Error).message).not.toContain(recoveryHash);
+    } finally {
+      await t.env.DB.prepare("INSERT INTO auth_settings (id, setup_opened_at) VALUES (1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))").run();
+    }
+  });
+
+  it("still answers true without a recovery hash when the row is missing (nothing to store there)", async () => {
+    await t.env.DB.prepare("DELETE FROM auth_settings WHERE id = 1").run();
+    try {
+      expect(await saveCredentials(t.env.DB, { secretHash: H1, sessionSecret: S1, createdAt: T1 })).toBe(true);
+    } finally {
+      await t.env.DB.prepare("INSERT INTO auth_settings (id, setup_opened_at) VALUES (1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))").run();
+    }
+  });
+});
+
 describe("saveCredentials and the claim token", () => {
   const setToken = () => t.env.DB.prepare("UPDATE auth_settings SET claim_token_hash = 'tokenhash' WHERE id = 1").run();
 
