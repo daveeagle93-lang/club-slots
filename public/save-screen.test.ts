@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { showSaveScreen } from "./save-screen.js";
 
-const SECRET = "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw";
-const RECOVERY = "Q7mT2vLx9RkWc4HnYp8aBd3sFgJu6ZeNiOo1VtXyM0w";
+const SECRET = "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"; // gitleaks:allow
+const RECOVERY = "Q7mT2vLx9RkWc4HnYp8aBd3sFgJu6ZeNiOo1VtXyM0w"; // gitleaks:allow
 
 type Clipboard = { writeText: (text: string) => Promise<void> };
 

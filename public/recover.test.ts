@@ -8,9 +8,9 @@ import { trimAdminSecret as setupTrim } from "./setup.js";
 
 const reply = (status: number, body: unknown = {}, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
-const SECRET = "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw";
-const RECOVERY = "Q7mT2vLx9RkWc4HnYp8aBd3sFgJu6ZeNiOo1VtXyM0w";
-const CODE = "Zk3pD8sWq1LmV6xRtY0uHc5nBg9aJe2FoIi4TyXdN7A";
+const SECRET = "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"; // gitleaks:allow
+const RECOVERY = "Q7mT2vLx9RkWc4HnYp8aBd3sFgJu6ZeNiOo1VtXyM0w"; // gitleaks:allow
+const CODE = "Zk3pD8sWq1LmV6xRtY0uHc5nBg9aJe2FoIi4TyXdN7A"; // gitleaks:allow
 const issued = (envPinned = false) => reply(200, { secret: SECRET, recoveryCode: RECOVERY, envPinned });
 
 type Call = { url: string; init?: RequestInit };

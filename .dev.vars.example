@@ -1,9 +1,9 @@
-# Settings for this Worker. The "Deploy to Cloudflare" button prompts for the one live line below.
+# Settings for this Worker. The "Deploy to Cloudflare" button prompts for nothing here: every line below is commented out.
 # For local development: cp .dev.vars.example .dev.vars (.dev.vars is git-ignored), then run: npm run dev
 # Anything here overrides the same name in wrangler.jsonc when running locally.
 
-# A private phrase you choose, at least 12 characters. You type it once on /setup to create the admin sign-in secret.
-SETUP_CODE=
+# Optional. Set it as a Worker secret to require a code on /setup, to reopen setup after the first-run window, and as recovery for the Access wizard.
+# SETUP_CODE=
 
 # Optional settings; see docs/configuration.md. Defaults apply when unset.
 # Minutes after the event's start when bookings close (negative = earlier). Default 0.
@@ -11,7 +11,7 @@ SETUP_CODE=
 # Plain-text privacy notice shown on the booking form; \n\n starts a new paragraph. Default: see the docs.
 # PRIVACY_NOTICE="We use your details to run the event.\n\nEmail us to have them deleted."
 
-# Admin sign-in; see docs/admin-auth.md. wrangler.jsonc sets ADMIN_AUTH=password for a new deployment.
+# Admin sign-in; see docs/admin-auth.md. Unset means password sign-in; nothing sets ADMIN_AUTH for a password site.
 # ADMIN_AUTH=password
 # Password provider override secrets, for existing deployments and local development only: a new deployment
 # creates its admin secret on /setup. Both are SECRETS: real values never go in git or wrangler.jsonc.

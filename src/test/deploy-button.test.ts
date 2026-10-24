@@ -81,9 +81,12 @@ describe("wrangler.jsonc as the button reads it", () => {
 });
 
 describe(".dev.vars.example", () => {
-  it("has exactly one live line, SETUP_CODE, so that is the only secret the button asks for", () => {
-    expect(liveLines).toHaveLength(1);
-    expect(liveKeys).toEqual(["SETUP_CODE"]);
+  it("has no live line, so the button asks for no secret", () => {
+    expect(liveLines).toHaveLength(0);
+  });
+
+  it("keeps SETUP_CODE= as a commented-out line, so it is documented but not prompted", () => {
+    expect(exampleLines).toContain("# SETUP_CODE=");
   });
 
   it("is still ignored by git in its copied form but kept itself", () => {
@@ -111,12 +114,5 @@ describe("cloudflare.bindings descriptions", () => {
       expect(description.length, key).toBeLessThanOrEqual(400);
       expect(description, key).not.toMatch(/wrangler|binding|\bD1\b/i);
     }
-  });
-
-  it("tells the organiser SETUP_CODE is private and at least 12 characters", () => {
-    const text = String(descriptions.SETUP_CODE?.description);
-    expect(text).toMatch(/12/);
-    expect(text).toMatch(/private/i);
-    expect(text).toContain("/setup");
   });
 });

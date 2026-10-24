@@ -36,9 +36,6 @@
     "bindings": {
       "DB": {
         "description": "Your club's booking database. Cloudflare creates it for you, so the suggested name is fine."
-      },
-      "SETUP_CODE": {
-        "description": "A private phrase you choose, at least 12 characters long. Keep it to yourself. You will type it once on your new site's /setup page to create your admin sign-in secret, and that page closes for good after the first successful sign-in."
       }
     }
   }
