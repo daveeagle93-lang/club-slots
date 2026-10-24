@@ -11,36 +11,45 @@ Maintainer: replace docs/images/booking-page-placeholder.svg with a real screens
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/daveeagle93-lang/slot-booker)
 
-You get your own copy of the app in your own Cloudflare account, on Cloudflare's free plan. Press the button, answer a short form, then make your admin sign-in. Allow about 15 minutes.
+You get your own copy of the app in your own Cloudflare account, on Cloudflare's free plan. Press the button, answer a short form, then open your new site to make your admin sign-in. There is no password to choose on the form.
 
 ## What the form asks for
 
 Press the button and sign in to Cloudflare (a free account is enough). Cloudflare then asks for these, in this order:
 
-1. **Your Git account.** Connect GitHub or GitLab. Cloudflare copies the code into it. There is a switch for whether your copy is private.
-2. **A project (Worker) name.** The suggested name is fine. It becomes part of your site's address.
-3. **A new database.** Cloudflare creates it for you. The suggested name is fine.
-4. **`SETUP_CODE`.** A private phrase you choose, **at least 12 characters**, such as four unrelated words. You type it once, on your new site, to make your admin sign-in. Keep it private and write it down somewhere safe.
-5. **Two switches: leave both OFF.**
-   - **Protect with Cloudflare Access: OFF.** The app has its own admin sign-in, and Access needs a custom domain and extra set-up first ([sign-in options](docs/sign-in.md)).
-   - **Enable Preview builds: OFF.** This app has no preview copies on purpose: they would put the whole app, admin pages included, on extra web addresses.
-6. **Advanced settings.** Leave them as they are.
+1. **Your Git account**, and a **"Create private Git repository"** checkbox. Cloudflare copies the code into your account. Tick the box if you want your copy to be private.
+2. **Project name.** The suggested name is fine. It is also your Worker's name, your copy's repository name and part of your site's address. If your account already has a repository of that name, Cloudflare suggests the same name with `-1` on the end; accept it.
+3. **Database.** Leave **Create new**, and leave the suggested name, location hint and read-replication checkbox as they are.
+4. **Build command** (empty) and **Deploy command** (`npm run deploy`). Leave both.
+5. If Cloudflare shows a switch for Cloudflare Access or for preview builds, leave it off. Neither appeared on 22 October 2026.
 
-Then press **Deploy** and wait for it to finish.
+Then press **Deploy**. It takes about a minute.
 
 If Cloudflare says your GitHub authorisation has expired, reinstall the Cloudflare GitHub app: [Cloudflare's instructions](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/github-integration/#reinstall-the-cloudflare-github-app).
 
 ## First run: `/setup`
 
-Do this once the deploy has finished. A new site has no admin sign-in until you do.
+Cloudflare does not show you your site's address when the deploy ends, so first find it.
 
-1. Open `https://<worker-name>.<your-workers-subdomain>.workers.dev/setup`. Find the address on the Worker's page in the Cloudflare dashboard.
-2. Type your `SETUP_CODE` and press **Continue**.
-3. The page shows your **admin secret** once. Copy it into a password manager now. Nobody can look it up for you later.
-4. Tick **I've saved it**, then press **Go to sign in**.
-5. Paste the secret into **Admin secret** and press **Sign in**.
+**Find your site's address.**
 
-Until you first sign in, running `/setup` again replaces the secret. After your first sign-in, `/setup` is closed for good. If the secret is lost, see [If the admin secret is lost](docs/handover.md#if-the-admin-secret-is-lost). If `/setup` says "Setup isn't ready", see [Troubleshooting](docs/deploying.md#troubleshooting).
+1. It is the `https://….workers.dev` line near the end of the build log.
+2. Or, in the Cloudflare dashboard, open **Workers & Pages**, then your Worker (it has the name you gave the project). Its page shows the address. These menu names are **unverified**: they will be checked on the next run.
+
+Open that address, not `/setup`. Then:
+
+1. While the first-run window is open, the address takes you to a page that says the site has no admin yet. Press **Create my admin secret**.
+2. The page shows your **admin secret** (you sign in with it) and your **recovery code** (it makes a new secret if you lose this one). Both are shown **once**. Copy **both** into a password manager, ideally as two separate entries. Nobody can look them up for you later.
+3. Tick **I've saved both**, then press **Go to sign in**.
+4. Paste the admin secret into **Admin secret** and press **Sign in**.
+
+Things to know:
+
+- **You have 30 minutes.** They count from when the database was created, not from your first visit, and a redeploy does not reopen them. A second visitor is refused ("This site has already been set up"). Until you first sign in, the same browser can ask for a new pair, which replaces the first.
+- **Until you press the button, anyone who finds your site's address could press it first.** To rule that out, set `SETUP_CODE` as a Worker secret (any phrase of 12 or more characters) before your first visit. The 30 minutes then no longer apply and `/setup` asks for that phrase.
+- **After 30 minutes with no admin made,** the site says setup is closed. Set `SETUP_CODE` as above and reload `/setup`. [Handover](docs/handover.md#if-the-admin-secret-is-lost) has the other ways.
+- **After your first sign-in,** `/setup` is closed for good.
+- **If you lose the admin secret,** use the recovery code on your site's `/recover` page. If you lose both, see [If the admin secret is lost](docs/handover.md#if-the-admin-secret-is-lost). More on problems: [Troubleshooting](docs/deploying.md#troubleshooting).
 
 Now set your club name and privacy contact, and make your first event: the [admin guide](docs/admin-guide.md) shows you how, step by step.
 
@@ -89,7 +98,7 @@ Every lane needs a name once there are two or more. The most you can have is 10 
 
 ## Status
 
-Work in progress. The button has been run end to end once, against the public copy of this repository (6 October 2026): it created the database, ran all the database updates that existed then, deployed the site to `workers.dev`, and `/setup`, sign-in, creating an event and booking all worked. That was one run. Anything it did not cover is marked **unverified** in the guides.
+Work in progress. The button has been run end to end once against the public copy of this repository (6 October 2026), when it still asked for a setup code: it created the database, ran all the database updates that existed then, deployed the site to `workers.dev`, and `/setup`, sign-in, creating an event and booking all worked. On 22 October 2026 a trial copy of the earlier version with no setup code was deployed through the form (it showed no secret field), which is what the form list above is based on. The first-run page, the recovery code and `/recover` described here have **not** yet been run through the button: that run is still to do. Anything not covered by a real run is marked **unverified** in the guides.
 
 ## Licence
 

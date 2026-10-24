@@ -2,9 +2,9 @@
 
 This page gets your club its own copy of the app on Cloudflare's free plan. The first part is for a club organiser and needs no terminal. The advanced parts are for people comfortable with a command line.
 
-Your copy is **one Cloudflare Worker**, named `slot-booker` unless you change it. It serves the website and the booking API, and it uses one D1 database, `slot-booker-db`. The migrations in `migrations/` (0001 to 0018) build the database.
+Your copy is **one Cloudflare Worker**, named `slot-booker` unless you change it. It serves the website and the booking API, and it uses one D1 database, `slot-booker-db`. The migrations in `migrations/` (0001 to 0019) build the database.
 
-**What was and was not checked.** The button was run once end to end against the public copy of this repository on 6 October 2026 ([Deploy buttons](https://developers.cloudflare.com/workers/platform/deploy-buttons/)): the form, the build, the migrations, the deploy to `workers.dev`, `/setup`, sign-in, creating an event and booking all worked. The rest of the steps follow Cloudflare's documentation and this repository's code and configuration. Where the text says something that run, the documentation and the code do not confirm, it says **unverified**. Dashboard labels may have changed.
+**What was and was not checked.** The button was run once end to end against the public copy of this repository on 6 October 2026 ([Deploy buttons](https://developers.cloudflare.com/workers/platform/deploy-buttons/)), when it still asked for a setup code: the form, the build, the migrations, the deploy to `workers.dev`, `/setup`, sign-in, creating an event and booking all worked. On 22 October 2026 a trial copy of the earlier version with no setup code was deployed through the form, which showed no secret field and ran `npm run deploy`. The first-run page, the recovery code and `/recover` described below have **not** yet been run through the button: that run is still to do. The rest of the steps follow Cloudflare's documentation and this repository's code and configuration. Where the text says something that run, the documentation and the code do not confirm, it says **unverified**. Dashboard labels may have changed.
 
 Contents:
 
@@ -25,36 +25,43 @@ You need:
 - A **Cloudflare account** (free). Use a club email address that more than one person can reach.
 - A **GitHub or GitLab account.** The button copies the code into it.
 - The address of the template, which must be a **public** repository on github.com or gitlab.com. The button only works from a public one.
-- About 15 minutes.
 
-Decide on a `SETUP_CODE` first: a private phrase of **at least 12 characters**, such as four unrelated words. It is **not** your admin secret. You will use it once, on your new site, to make the admin secret. Write it down somewhere safe.
+There is nothing to decide or type beforehand: the form has no password or code field. You make your admin secret on your new site once it is deployed.
 
 ## Deploy with the button
 
 1. **Press the "Deploy to Cloudflare" button** in the [README](../README.md). It opens Cloudflare.
 2. **Sign in to Cloudflare**, or create the free account. The sign-up screens are Cloudflare's own: unverified here.
-3. **Connect your GitHub or GitLab account** when asked. The form has a toggle for whether your copy of the repository is private. Cloudflare's docs say the button copies the repository into your own account, so you end up with your own copy that you own.
-4. **Fill in the prompts.** Cloudflare's docs say you can customise the "repository name, Worker name, and required resource names". The suggestions are fine.
-   - The **Worker name** becomes part of your address: `https://<worker-name>.<your-workers-subdomain>.workers.dev`.
-   - The **database** (`DB`) is made for you. The description shown is the one in `package.json`: "Your club's booking database. Cloudflare creates it for you, so the suggested name is fine."
-   - **`SETUP_CODE`**: type your phrase. The description shown is the one in `package.json`. A code under 12 characters is accepted by the form but then `/setup` refuses it (see Troubleshooting).
-   - The form also shows toggles for "Enable Preview builds" and "Protect with Cloudflare Access", and an Advanced settings section. Leave both toggles off and the Advanced settings alone; the reasons are in the [README](../README.md#what-the-form-asks-for).
-5. **Deploy.** Cloudflare creates the database and replaces the placeholder database id in your copy of `wrangler.jsonc`, then builds the copy with Workers Builds. That runs `npm run deploy`, which applies all 18 migrations to the database through its `DB` binding and publishes the Worker. Wait for it to finish. Both scripts pass `--env=""`, which targets the top-level environment explicitly: without it Wrangler warned that several environments are defined and none was chosen (`env.preview` exists). A dry run of the current scripts shows no such warning.
-6. **Find your address.** In the Cloudflare dashboard, open **Workers & Pages**, then the Worker (`slot-booker` by default). Its page shows its `workers.dev` address. These labels are **unverified**. A new account may have to pick a `workers.dev` subdomain first: also unverified.
-7. **Make your admin secret.** Open `https://<worker-name>.<your-workers-subdomain>.workers.dev/setup` and:
-   1. Type your `SETUP_CODE` and press **Continue**.
-   2. The page shows your **admin secret** (43 characters) **once**. Press **Copy** and paste it into a password manager now.
-   3. Tick **I've saved it**, then press **Go to sign in**.
-   4. On the sign-in page, paste the secret into **Admin secret** and press **Sign in**.
+3. **Connect your Git account** when asked. The form has a "Create private Git repository" checkbox: tick it if you want your copy private. Cloudflare's docs say the button copies the repository into your own account, so you end up with your own copy that you own.
+4. **Fill in the prompts.** Cloudflare's docs say you can customise the "repository name, Worker name, and required resource names". The suggestions are fine. The form list is in the [README](../README.md#what-the-form-asks-for).
+   - The **project name** is also your Worker's name and your copy's repository name, and it becomes part of your address: `https://<worker-name>.<your-workers-subdomain>.workers.dev`. If your account already has a repository of that name, Cloudflare suggests the same name with `-1`; accept it.
+   - The **database** (`DB`) is made for you: leave "Create new" and the suggested name, location hint and read-replication checkbox. The description shown is the one in `package.json`: "Your club's booking database. Cloudflare creates it for you, so the suggested name is fine."
+   - **Build command** is empty and **Deploy command** is `npm run deploy`: leave both.
+   - There is no secret or password field. If the form shows a switch for Cloudflare Access or for preview builds, leave it off; neither appeared on 22 October 2026.
+5. **Deploy.** Cloudflare creates the database and replaces the placeholder database id in your copy of `wrangler.jsonc`, then builds the copy with Workers Builds. That runs `npm run deploy`, which applies all 19 migrations to the database through its `DB` binding and publishes the Worker. Wait for it to finish; the trial run took about 45 seconds. The last migration starts your 30-minute first-run window (see below). Both scripts pass `--env=""`, which targets the top-level environment explicitly: without it Wrangler warned that several environments are defined and none was chosen (`env.preview` exists). A dry run of the current scripts shows no such warning.
+6. **Find your site's address.** Cloudflare does not show it when the deploy ends. In this order:
+   1. It is the `https://….workers.dev` line near the end of the build log.
+   2. Or, in the Cloudflare dashboard, open **Workers & Pages**, then your Worker (named as you named the project). Its page shows the address. These menu names are **unverified**: check on the next run and correct this. A new account may have to pick a `workers.dev` subdomain first: also unverified.
 
-What to know about `/setup`:
+   Open that address, not `/setup`.
+7. **Make your admin secret and recovery code.** While the first-run window is open, your address takes you to a page that says the site has no admin yet. Then:
+   1. Press **Create my admin secret**.
+   2. The page shows your **admin secret** (43 characters) and your **recovery code** (43 characters), **once**. Press **Copy admin secret** and **Copy recovery code** and paste each into a password manager now, ideally as two separate entries.
+   3. Tick **I've saved both**, then press **Go to sign in**.
+   4. On the sign-in page, paste the admin secret into **Admin secret** and press **Sign in**.
 
-- It works only on a password-provider site (`ADMIN_AUTH=password`, which `wrangler.jsonc` sets) and only while no admin has signed in yet.
-- If you open an admin page before doing this, it sends you to `/setup` (once `SETUP_CODE` is in place).
-- Running `/setup` again before the first sign-in **replaces** the secret: the old one stops working.
-- After the first successful sign-in it is closed for good (404).
-- The setup code is limited to 5 attempts per 15 minutes per visitor (every attempt counts), compared in constant time, and the page accepts same-origin requests only.
-- Only a hash of the secret is stored (table `admin_credentials`). If you lose the secret, see [If the admin secret is lost](handover.md#if-the-admin-secret-is-lost).
+What to know about the first run:
+
+- **The window is 30 minutes, counted from when the database was created** (the last migration in the build), not from your first visit. A redeploy does not reopen it.
+- **Only the button creates anything.** Opening the page, or a link checker or preview fetching your address, creates nothing.
+- A second visitor is refused with "This site has already been set up". Until you first sign in, the browser that pressed the button can press again to **replace** the pair: the old secret and the old recovery code then stop working.
+- **Until you press the button, anyone who finds your site's address within the 30 minutes can press it first.** To close that gap, set `SETUP_CODE` as a Worker secret (any phrase of 12 or more characters) before your first visit. The window is then off and `/setup` asks for that phrase, as in v1.1.
+- It works only on a password-provider site and only while no admin has signed in yet. Under Cloudflare Access, `/setup` is closed (404).
+- If you open an admin page while the window is open and nobody has pressed the button, it sends you to `/setup`.
+- After the first successful sign-in `/setup` is closed for good (404).
+- With `SETUP_CODE` set, the code form is limited to 5 attempts per 15 minutes per visitor (every attempt counts), the code is compared in constant time, and the page accepts same-origin requests only. The button has no such limit, because there is nothing to guess.
+- Only hashes are stored: the admin secret's in `admin_credentials` and the recovery code's in `auth_settings`. If you lose the secret, use the recovery code on your site's `/recover` page; if you lose both, see [If the admin secret is lost](handover.md#if-the-admin-secret-is-lost).
+- If nobody pressed the button within the 30 minutes, the page says setup is closed. See [Troubleshooting](#troubleshooting).
 
 ## Check that it works
 
@@ -62,7 +69,7 @@ On your phone or computer, with your own address:
 
 1. Open `https://<your-address>/api/health`. It should show `{"ok":true}`.
 2. Open `https://<your-address>/`. You should see the landing page ("Slot booker" until you set a club name, and no events yet).
-3. Open `https://<your-address>/admin/` while signed out. It should send you to the sign-in page (or to `/setup` if you have not done step 7 yet).
+3. Open `https://<your-address>/admin/` while signed out. It should send you to the sign-in page (or to `/setup` if you have not done step 7 yet and the window is still open).
 4. Sign in, open **Settings** (`/admin/settings`) and set the club name and the **privacy contact** (a name and an email address). Until then the booking page shows signed-in admins a warning and tells bookers nothing about who to contact. See [branding.md](branding.md).
 5. Create a test event (see [admin-guide.md](admin-guide.md)), open its booking link in a private window and book a slot. Then delete the test event.
 6. Press **Sign out**, then check `/admin/` sends you back to the sign-in page.
@@ -121,7 +128,7 @@ You need Node 24 and Git. Every step below uses a command that exists in `packag
    Optional keys, from `scripts/configure-core.ts`:
 
    - `name`: the Worker's name, if `slot-booker` is taken (lower-case letters, digits and hyphens).
-   - `vars`: plain-text settings (strings) written into both the production and the preview block, for example `"BOOKING_CUTOFF_OFFSET_MINUTES": "-30"`. `productionVars` and `previewVars` add settings to one block only. `ADMIN_AUTH` is already `password` in `wrangler.jsonc`, so a password-provider site needs none. See [configuration.md](configuration.md).
+   - `vars`: plain-text settings (strings) written into both the production and the preview block, for example `"BOOKING_CUTOFF_OFFSET_MINUTES": "-30"`. `productionVars` and `previewVars` add settings to one block only. `wrangler.jsonc` sets no `ADMIN_AUTH`: unset means `password`, so a password-provider site needs none. See [configuration.md](configuration.md).
    - Secrets (`ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET`) are refused here: they are Worker secrets.
 
    Then generate the config:
@@ -144,17 +151,15 @@ You need Node 24 and Git. Every step below uses a command that exists in `packag
 
    `apply` asks for confirmation and takes a backup first. Wrangler prints the Worker's address. Both commands in `npm run deploy` pass `--env=""`, so the top-level environment is targeted explicitly and Wrangler does not warn about `env.preview`.
 
-6. **Set the setup code.** It prompts for the value, so nothing secret goes on the command line:
+6. **Make your admin secret and recovery code.** Open the address Wrangler printed (not `/setup`) within 30 minutes of the migrations running, and follow step 7 of the button path above. If you would rather not rely on the window, set a `SETUP_CODE` first: it prompts for the value, so nothing secret goes on the command line, and it comes after the deploy so the Worker already exists:
 
    ```sh
    npx wrangler secret put SETUP_CODE
    ```
 
-   This comes after the deploy so the Worker already exists. (Wrangler's source has a prompt that offers to create the Worker if it does not, but I have not run it, so I use the order that avoids needing it.) Whether the secret is live the moment the command finishes is **unverified**: if `/setup` still says it is not ready, wait a minute and reload.
+   (Wrangler's source has a prompt that offers to create the Worker if it does not exist, but I have not run it.) Whether the secret is live the moment the command finishes is **unverified**: if `/setup` still says it is not ready, wait a minute and reload.
 
-7. **Make your admin secret** at `/setup`, as in step 7 of the button path above.
-
-Local development uses `.dev.vars` instead of secrets: `cp .dev.vars.example .dev.vars`, set `SETUP_CODE`, `npm run db:migrate:local`, `npm run dev`. After `npm run configure`, Wrangler keys the local database file on the database id, so `npm run dev` then starts from an empty local database: run `npm run db:migrate:local` again.
+Local development uses `.dev.vars` instead of secrets: `cp .dev.vars.example .dev.vars`, `npm run db:migrate:local`, `npm run dev`. The local database gets its own 30-minute window when it is created; to use `/setup` after that, set a `SETUP_CODE` of 12 or more characters in `.dev.vars`. After `npm run configure`, Wrangler keys the local database file on the database id, so `npm run dev` then starts from an empty local database: run `npm run db:migrate:local` again.
 
 ### Why the generated config is used, and the options that were rejected
 
@@ -169,13 +174,13 @@ Those three checks were made on an earlier version of the app and were not repea
 A club that wants named admins, or its own address, can add a custom domain and then Cloudflare Access.
 
 1. **Custom domain.** It needs a domain whose nameservers are managed by Cloudflare ([Cloudflare's migration notes](https://developers.cloudflare.com/workers/static-assets/migration-guides/migrate-from-pages/) say custom domains require this). Adding it to the Worker is done in the dashboard under the Worker's settings: the exact labels are **unverified**, so follow Cloudflare's custom domains page for Workers.
-2. **Access.** In the club's own copy of `wrangler.jsonc`, change the `vars` to `ADMIN_AUTH` = `access` and add `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`, commit and push so Workers Builds redeploys (or run `npm run deploy` from the command line). Create the Access application for the custom domain's hostname with the paths `/admin`, `/admin/*`, `/api/admin` and `/api/admin/*`. The full click path and the settings are in [admin-auth.md](admin-auth.md).
+2. **Access.** In the club's own copy of `wrangler.jsonc`, add `vars` with `ADMIN_AUTH` = `access`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (the template has no `vars`), commit and push so Workers Builds redeploys (or run `npm run deploy` from the command line). Create the Access application for the custom domain's hostname with the paths `/admin`, `/admin/*`, `/api/admin` and `/api/admin/*`. The full click path and the settings are in [admin-auth.md](admin-auth.md).
 3. **Config `vars` overwrite values set in the dashboard on every deploy** unless `keep_vars` is set ([Wrangler docs](https://developers.cloudflare.com/workers/wrangler/commands/workers/)). Secrets are never deleted by a deploy.
 4. **Test the sign-in.** It is **unverified** whether the `Cf-Access-Jwt-Assertion` header reaches a Worker that serves static assets: Cloudflare's docs say `ctx.access` is not available for such Workers ([Cloudflare Access for Workers](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)) and do not mention the header. The app validates the header itself. If admin answers 401 after you sign in through Access, that is the thing to look at.
 
 The `workers.dev` address keeps serving the public booking pages. Access can protect `workers.dev` addresses too ([docs](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)), but the recommendation stays: use the custom domain.
 
-With Access on, `/setup` is closed (404) and the stored admin secret is unused. See [handover.md](handover.md) for switching over and for adding and removing admins.
+With Access on, `/setup` is closed (404) and the stored admin secret is unused. The first time an admin signs in through Access, the Access settings are also saved in the database, so the `ADMIN_AUTH` line is then no longer what keeps the site on Access (see "Upgrading from v1.1" below for the order to remove it in). See [handover.md](handover.md) for switching over and for adding and removing admins.
 
 ## For maintainers: the preview environment
 
@@ -189,10 +194,10 @@ Developers keep their own ids in `account.local.json` and run `npm run configure
 ```sh
 npx wrangler d1 migrations apply DB --remote --env preview
 npx wrangler deploy --env preview
-npx wrangler secret put SETUP_CODE --env preview
 npm run seed -- --remote --env preview
 ```
 
+- The preview has its own database, so its own 30-minute first-run window. After that, set a `SETUP_CODE` for it with `npx wrangler secret put SETUP_CODE --env preview` to use `/setup` again.
 - With `--env preview`, Wrangler looks the `DB` binding up in `env.preview.d1_databases` only, so these cannot migrate production. (Checked locally on the earlier version with `--local`; the remote commands resolve it the same way but were not run for this page.)
 - `npm run seed -- --remote --env preview` inserts a sample event (and sample bookings; add `--no-bookings` for the event only) into the **preview** database only: the script refuses production. It does not apply migrations: if it fails with `no such table: events`, apply them first. Each run adds another event.
 - Wrangler's `--preview` flag for D1 is an older, different mechanism based on `preview_database_id`. This repository does not use it; do not mix it with `--env preview`.
@@ -212,7 +217,7 @@ The button makes a copy. Changes to the template do **not** flow into it, and Cl
    git push
    ```
 
-   The migrations run on every deploy (the `deploy` script applies them), so pushing a merge that adds a migration applies it. Expect a conflict on the `database_id` lines of `wrangler.jsonc` if the button or you replaced the placeholders there: keep your own ids. That conflict is expected from how the button is documented to work; I have not seen it. A push redeploys your Worker automatically: the button's form says "Every push to your production branch will be deployed automatically". Tip: check the Deployments tab on the Worker's page in the dashboard after your first push. To deploy without pushing, run `npm run deploy` from your clone.
+   The migrations run on every deploy (the `deploy` script applies them), so pushing a merge that adds a migration applies it. Expect a conflict on the `database_id` lines of `wrangler.jsonc` if the button or you replaced the placeholders there: keep your own ids. If you added a `vars` block (for Cloudflare Access, say), expect a conflict there too: see "Upgrading from v1.1" below. That conflict is expected from how the button is documented to work; I have not seen it. A push redeploys your Worker automatically: the button's form says "Every push to your production branch will be deployed automatically". Tip: check the Deployments tab on the Worker's page in the dashboard after your first push. To deploy without pushing, run `npm run deploy` from your clone.
 2. **Deploy a fresh copy** with the button and move the data across, as in [handover.md](handover.md). More work, but it starts clean.
 
 Apply all migrations before running new code that needs them. For instance `0011_site_icons` adds the `site_icons` table: without it Settings, saving or removing the logo and uploading icons return errors, while public pages fall back to the default icons.
@@ -230,20 +235,42 @@ To go from v1.0 (migrations up to `0014`) to the version with lanes and places a
 
 I upgraded a v1.0 preview database (2 events, 5 bookings) with `wrangler d1 migrations apply` and then `wrangler deploy --env preview` on 21 October 2026, and every booking was unchanged afterwards. I have not run `npm run deploy` end to end against a v1.0 database, and I have not measured the gap on a deployed copy.
 
+### Upgrading from v1.1
+
+v1.1 (migrations up to `0018`) asked for a `SETUP_CODE` on the Deploy form. This version (migration `0019`) does not, and the template's `wrangler.jsonc` no longer has a `vars` block. Updating works as described above. What changes for you:
+
+- **Keep your own `vars`.** The template no longer sets `ADMIN_AUTH`, so if your copy has a `vars` block, merging the template shows a conflict on that line. Keep yours; nothing else changes. A password-mode site can delete the line or keep it: both work.
+- **A site whose admin has signed in, or that has `SETUP_CODE` set, is unaffected.** It behaves as before, and the first-run window is irrelevant to it.
+- **A site with no admin and no `SETUP_CODE`** (one that today answers "Admin sign-in isn't set up." on every admin page) gets a 30-minute first-run window when the migration runs. Open its address within 30 minutes to make the admin secret and recovery code as in step 7 above; after that, set `SETUP_CODE` to reopen it.
+- **A site made on v1.1 that has signed in has no recovery code.** It keeps whatever recovery it has today: its `SETUP_CODE`, or the D1 console ([handover.md](handover.md#if-the-admin-secret-is-lost)). A recovery code exists only for an admin secret made on this version's `/setup`.
+
+**If your site is on Cloudflare Access through `ADMIN_AUTH`, do these in this order.** The template no longer has the line, so it is yours to keep until the site has recorded the Access settings itself:
+
+1. Deploy the new code with `"vars": { "ADMIN_AUTH": "access" }` still in your own `wrangler.jsonc` (with your `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`).
+2. Sign in once through Cloudflare Access. This first sign-in records the Access settings in the database (the mode is "pinned").
+3. Check that `/api/admin/session` shows provider `access`.
+4. Only then remove the `ADMIN_AUTH` line.
+
+Removing the line **before** that first sign-in drops the site back to password mode, with the old admin secret valid again. A site that has never had an admin sign in through Access is not protected against losing the line. Once pinned, the site stays on Access without the line, and editing the line back to `password` does not leave Access either; the ways out are in [handover.md](handover.md).
+
+I have not run this upgrade on a deployed copy.
+
 ## Troubleshooting
 
-### `/setup` says "Setup isn't ready"
+### `/setup` says "Setup is closed. The first-run window ended"
 
-The full text is: "Setup isn't ready: set SETUP_CODE (a phrase of at least 12 characters) as a Worker secret, then reload this page." (A 503.) `SETUP_CODE` is missing or shorter than 12 characters. Set it:
+Nobody pressed **Create my admin secret** within 30 minutes of the database being created, and no `SETUP_CODE` is set, so no admin secret can be made from the web any more. (A 503. An admin page says "Admin sign-in isn't set up." for the same reason.) Reopen it in one of two ways:
 
-- Dashboard: the Worker, then **Settings**, then **Variables and Secrets**, and add a secret named `SETUP_CODE` (menu names **unverified**), or
-- Terminal, in the project folder: `npx wrangler secret put SETUP_CODE`.
+- Set `SETUP_CODE` as a Worker secret (any phrase of 12 or more characters), then reload `/setup` and type that phrase. In the dashboard: the Worker, then **Settings**, then **Variables and Secrets**, and add a secret named `SETUP_CODE` (menu names **unverified**). Or in a terminal, in the project folder: `npx wrangler secret put SETUP_CODE`.
+- Or run the reopen statement below in the D1 console. It starts a new 30-minute window.
 
-Reload `/setup`.
+### `/setup` says "Setup isn't ready: SETUP_CODE must be at least 12 characters."
+
+`SETUP_CODE` is set but shorter than 12 characters, so setup refuses it (a 503). Set a longer one as above and reload `/setup`.
 
 ### An admin page says "Admin sign-in isn't set up."
 
-This is a 503 on `/admin/*` and `/api/admin/*`. For a new deployment it normally means no admin secret exists yet **and** `SETUP_CODE` is missing or too short, so the page cannot send you to `/setup`. Fix the setup code as above, then open `/setup`. It can also mean `ADMIN_AUTH` is unset or wrong, or one of the sign-in settings is missing or malformed. The page does not say which; the reason is in the Worker's logs.
+This is a 503 on `/admin/*` and `/api/admin/*`. For a new deployment it normally means the first-run window has ended with no admin made and no `SETUP_CODE` is set: see the entry above. (While the window is open, or with a `SETUP_CODE` set, an admin page sends you to `/setup` instead.) It can also mean `ADMIN_AUTH` is **set** to something other than `access` or `password` (an empty value counts), or one of the sign-in settings is missing or malformed. An unset `ADMIN_AUTH` is fine: it means `password`. The page does not say which; the reason is in the Worker's logs.
 
 Read the logs with Wrangler (the command exists in the installed Wrangler 4.147.0, but I have not run it against a real deployment):
 
@@ -253,13 +280,38 @@ Read the logs with Wrangler (the command exists in the installed Wrangler 4.147.
 
 The Worker's logs may also be in the dashboard: **unverified**.
 
-### `/setup` shows "Setup has already been completed. Sign in instead."
+### `/setup` says "This site has already been set up"
 
-An admin has already signed in, so `/setup` is closed (404). Sign in at `/admin/login`. If the secret is lost, use [If the admin secret is lost](handover.md#if-the-admin-secret-is-lost).
+Someone, probably you, has already pressed **Create my admin secret** (or made a secret with the code), and nobody has signed in yet. If you pressed it, sign in at `/admin/login` with the admin secret you saved. If you did it in the browser you still have, open `/setup` there to get a new pair.
+
+If you **never saw your admin secret** (the connection dropped, say), or you think someone else pressed the button first, take the site back: set `SETUP_CODE` as a Worker secret (any phrase of 12 or more characters) and reload `/setup`, or run the reopen statement below.
+
+### `/setup` shows "Setup has already been completed."
+
+An admin has already signed in, so `/setup` is closed (404). Sign in at `/admin/login`. If the secret is lost, use the recovery code on `/recover`, or see [If the admin secret is lost](handover.md#if-the-admin-secret-is-lost).
+
+### The reopen statement
+
+For when you need the first-run claim page back. Run it in the D1 console (dashboard menu names **unverified**), or from a terminal in the project folder. **Delete the `admin_credentials` row first** if an admin secret was already made:
+
+```sh
+npx wrangler d1 execute DB --remote --env="" --command "DELETE FROM admin_credentials"
+npx wrangler d1 execute DB --remote --env="" --command "UPDATE auth_settings SET setup_opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL, recovery_hash = NULL, recovery_created_at = NULL;"
+```
+
+The second statement starts a new 30-minute window and also clears the recovery code. That matters: an old recovery code still works at any time, and could make a new admin in the empty site. So run the whole statement, not a shorter one, whenever the recovery code might be known to someone else. The new pair you then make on `/setup` includes a new recovery code.
+
+If your site is on Cloudflare Access and you need to get back to the password sign-in, the statement is `UPDATE auth_settings SET mode = 'password', changed_by = 'owner' WHERE id = 1;` (and remove any `ADMIN_AUTH` = `access` line from your settings first, or the next Access sign-in puts Access back).
+
+### `/recover` says "Not found"
+
+`/recover` answers "Not found" if the site has no stored recovery code (an admin secret made before this version has none), or if `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret: they override the stored credentials, so there is nothing for `/recover` to replace. Delete those secrets first, or use the reopen statement above.
+
+If your site is on Cloudflare Access with an `ADMIN_AUTH` = `access` line in its settings, remove that line **first** and then use `/recover`; otherwise the next Access sign-in puts the Access mode back and undoes the recovery. `/recover` says so when it detects the setting.
 
 ### "That setup code isn't right." or "Too many attempts"
 
-Check the code you chose. After 5 attempts in 15 minutes the page says "Too many attempts. Try again in N minutes." Wait that long. The code is trimmed of spaces at both ends, but spaces inside it count.
+This is only for a site with `SETUP_CODE` set. Check the code you chose. After 5 attempts in 15 minutes the page says "Too many attempts. Try again in N minutes." Wait that long. The code is trimmed of spaces at both ends, but spaces inside it count.
 
 ### Admin sign-in says "Too many attempts"
 
@@ -296,12 +348,12 @@ The database probably lacks a migration. Run `npm run db:migrations:apply` (or `
 
 ### Local development: `/setup` 404s
 
-Check `.dev.vars` has `SETUP_CODE` of 12 or more characters and that neither `ADMIN_PASSWORD_HASH` nor `ADMIN_SESSION_SECRET` is set there (setting either turns `/setup` off). Also check `ADMIN_AUTH` is `password`.
+The local database's 30-minute window may have ended: check `.dev.vars` has `SETUP_CODE` of 12 or more characters. Also check that neither `ADMIN_PASSWORD_HASH` nor `ADMIN_SESSION_SECRET` is set there (setting either turns `/setup` off) and that `ADMIN_AUTH`, if set, is `password`.
 
 ## Before a real event
 
 - **Data location.** The button creates the database for you: whether it offers a location or jurisdiction choice is **unverified**. If bookings must stay in the EU, use the command-line path with `--jurisdiction eu`.
-- **The booking API has no rate limiting or bot protection.** Only the admin sign-in and `/setup` count attempts. Add something like Cloudflare Turnstile before posting the link publicly.
+- **The booking API has no rate limiting or bot protection.** Only the admin sign-in, `/setup` (with a `SETUP_CODE`) and `/recover` count attempts. Add something like Cloudflare Turnstile before posting the link publicly.
 - **Privacy notice.** The booking form shows one. The default says details are kept until an organiser deletes the event, and nothing is deleted automatically, which is what the app does: delete or clear out old events from the admin list when you no longer need them. The default names no data controller or contact, so set the privacy contact on the Settings page and, if you can, replace the notice with your own text ([configuration.md](configuration.md)).
 - **Admin sign-in.** The default is a single shared secret with no second factor and no per-person identity ([admin-auth.md](admin-auth.md), "Known limits"). If that is not enough for your club, put the site on a custom domain and use Access (above).
-- **Keep these safe.** Your Cloudflare login, the `SETUP_CODE` and the admin secret: see [handover.md](handover.md).
+- **Keep these safe.** Your Cloudflare login, the admin secret and the recovery code (and the `SETUP_CODE`, if you set one): see [handover.md](handover.md).
