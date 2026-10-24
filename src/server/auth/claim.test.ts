@@ -195,7 +195,7 @@ describe("recoverAdmin", () => {
 
     expect(await recoverAdmin(t.env.DB, next)).toBe(true);
     expect(await settings()).toMatchObject({
-      recovery_hash: next.recoveryHash, recovery_created_at: T3, mode: "password", changed_at: T3, changed_by: "recovery",
+      recovery_hash: next.recoveryHash, recovery_created_at: T3, mode: "password", changed_at: null, changed_by: null,
       claim_token_hash: null,
     });
     expect(await loadCredentials(t.env.DB)).toEqual({ secretHash: next.secretHash, sessionSecret: next.sessionSecret, firstLoginAt: T2 });
@@ -237,6 +237,13 @@ describe("recoverAdmin", () => {
     expect(await recoverAdmin(t.env.DB, next)).toBe(true);
     expect(await loadCredentials(t.env.DB)).toEqual({ secretHash: next.secretHash, sessionSecret: next.sessionSecret, firstLoginAt: null });
     expect((await settings())?.recovery_hash).toBe(next.recoveryHash);
+  });
+
+  it("leaves changed_at and changed_by alone when the mode was already password", async () => {
+    const first = await claimed();
+    await t.env.DB.prepare("UPDATE auth_settings SET changed_at = ?, changed_by = 'owner' WHERE id = 1").bind(T1).run();
+    expect(await recoverAdmin(t.env.DB, { ...(await admin(T3)), oldRecoveryHash: first.recoveryHash })).toBe(true);
+    expect(await settings()).toMatchObject({ mode: "password", changed_by: "owner", changed_at: T1 });
   });
 
   it("resets the mode from access to password", async () => {

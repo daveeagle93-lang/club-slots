@@ -72,6 +72,17 @@ describe("adminAuthFor: the sign-in mode (design 3.8)", () => {
     expect(await adminAuthFor(env({ DB: t.env.DB }))).toMatchObject({ error: "not_configured" });
   });
 
+  it("names the stored settings, not the environment variables, when the D1 Access settings are unusable", async () => {
+    await setMode("access");
+    await t.env.DB.prepare("UPDATE auth_settings SET access_team_domain = 'evil.example' WHERE id = 1").run();
+    expect(await adminAuthFor(env({ DB: t.env.DB }))).toEqual({
+      error: "not_configured", reason: "the stored Access settings in auth_settings are unusable (team domain or AUD)",
+    });
+    expect(await adminAuthFor(env({ DB: noRow, ADMIN_AUTH: "access", ACCESS_TEAM_DOMAIN: "evil.example", ACCESS_AUD: "aud" }))).toEqual({
+      error: "not_configured", reason: "ACCESS_TEAM_DOMAIN must be a cloudflareaccess.com host and ACCESS_AUD must be set",
+    });
+  });
+
   it("unset, D1 password, no credentials: awaiting setup, with the reworded reason", async () => {
     expect(await adminAuthFor(env({ DB: t.env.DB }))).toEqual({
       error: "not_configured", reason: "no admin credentials yet: open /setup", awaitingSetup: true,

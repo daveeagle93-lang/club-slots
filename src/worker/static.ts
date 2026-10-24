@@ -14,8 +14,9 @@ export const assets = (env: AppEnv): Fetcher => {
 
 /**
  * "/": the landing page (public/index.html) with the club's title and link-preview tags written in. See open-graph.ts.
- * While the claim window is open, GET of exactly "/" goes to /setup instead, so the first visitor finds the claim page. HEAD
- * and every other path are left alone, so a crawler or a link preview never triggers the read or sees the redirect.
+ * While the claim window is open, GET of exactly "/" goes to /setup instead, so the first visitor finds the claim page. Only HEAD
+ * and other paths are left alone: a GET crawler during the window gets the redirect and the /setup page but cannot claim,
+ * because a GET never writes.
  */
 export const serveLandingPage: RouteHandler = async ({ request, env }) => {
   if (request.method === "GET" && new URL(request.url).pathname === "/") {
@@ -53,6 +54,14 @@ export const serveEventFallbackPage: RouteHandler = ({ request, env }) => {
   return serveWithTags(assets(env), env.DB, request, "/event", slug);
 };
 
+/** A static page by its clean URL without the visitor's conditional headers, sent no-store. */
+const servePage = async (env: AppEnv, request: Request, path: string): Promise<Response> => {
+  const page = await assets(env).fetch(new Request(new URL(path, request.url), { method: "GET" }));
+  const out = new Response(page.body, page);
+  for (const [name, value] of Object.entries(noStore)) out.headers.set(name, value);
+  return out;
+};
+
 /**
  * /setup: the first-run page (public/setup.html), while setup is open, claimable or claimed (src/server/setup.ts). Fetched by
  * its clean URL without the visitor's conditional headers, so a cached copy can never answer once setup has closed, and sent
@@ -62,10 +71,7 @@ export const serveSetupPage: RouteHandler = async ({ request, env }) => {
   const { state, reason } = await readSetup(env);
   if (state === "closed") return plain(404, "Not found.");
   if (state === "not_ready") return plain(503, setupNotReadyMessage(reason!)); // a not_ready read always has a reason
-  const page = await assets(env).fetch(new Request(new URL("/setup", request.url), { method: "GET" }));
-  const out = new Response(page.body, page);
-  for (const [name, value] of Object.entries(noStore)) out.headers.set(name, value);
-  return out;
+  return servePage(env, request, "/setup");
 };
 
 /**
@@ -75,8 +81,5 @@ export const serveSetupPage: RouteHandler = async ({ request, env }) => {
  */
 export const serveRecoverPage: RouteHandler = async ({ request, env }) => {
   if (envCredentialsSet(env) || (await loadAuthState(env.DB)).settings.recoveryHash === null) return plain(404, "Not found.");
-  const page = await assets(env).fetch(new Request(new URL("/recover", request.url), { method: "GET" }));
-  const out = new Response(page.body, page);
-  for (const [name, value] of Object.entries(noStore)) out.headers.set(name, value);
-  return out;
+  return servePage(env, request, "/recover");
 };

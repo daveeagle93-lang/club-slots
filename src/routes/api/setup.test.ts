@@ -566,7 +566,16 @@ describe("POST /api/setup: the claim (no SETUP_CODE, window open)", () => {
   });
 
   it("lets exactly one of two concurrent claims win, and leaves one matching secret, recovery code and token", async () => {
-    const [a, b] = await Promise.all([claimPost(), claimPost()]);
+    // Both read the claim state before either writes, then race for the credentials row.
+    let gate!: () => void;
+    const open = new Promise<void>((resolve) => { gate = resolve; });
+    let waiting = 0;
+    const meeting = beforeStatement(t.env.DB, /^INSERT INTO admin_credentials/, async () => {
+      if (++waiting === 2) gate();
+      await open;
+    });
+    const [a, b] = await Promise.all([claimPost({ env: claimEnv(meeting) }), claimPost({ env: claimEnv(meeting) })]);
+    expect(waiting).toBe(2);
     expect([a.status, b.status].sort()).toEqual([200, 409]);
     const [win, lose] = a.status === 200 ? [a, b] : [b, a];
     expect(await lose.json()).toEqual(ALREADY);

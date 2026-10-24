@@ -9,7 +9,7 @@
 //
 // Two databases: the top-level d1_databases is production (and what local dev and
 // the tests use); env.preview.d1_databases is a separate database for the preview
-// environment. d1_databases and vars are non-inheritable, so each block is spelled out in full.
+// environment. d1_databases is non-inheritable, so each block is spelled out in full.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "slot-booker",

@@ -6,11 +6,12 @@
 // The claim token, the admin secret and the recovery code are never stored or logged here: only SHA-256 of the token
 // and the salted hashes of the other two.
 
-import { base64urlEncode, sha256, utf8 } from "./crypto";
+import { base64urlEncode, generateAdminSecret, hashAdminSecret, sha256, utf8 } from "./crypto";
 
 export const CLAIM_COOKIE = "__Host-sb_claim";
 const CLAIM_COOKIE_MAX_AGE = 86400;
 const CLAIM_TOKEN_BYTES = 32;
+const SESSION_SECRET_BYTES = 32; // 43 base64url characters, over the 32 the session signature needs
 
 /** Same attributes as the admin session cookie; the claim is only ever re-shown to the browser that made it. */
 export function claimCookie(token: string): string {
@@ -38,6 +39,22 @@ export async function hashClaimToken(token: string): Promise<string> {
 }
 
 export interface NewAdmin { secretHash: string; sessionSecret: string; recoveryHash: string; nowIso: string }
+
+/** A new admin secret and recovery code of the same kind, with what is stored for them (only salted hashes) and a new session secret. */
+export async function makeAdmin(nowIso: string): Promise<{ secret: string; recoveryCode: string; admin: NewAdmin }> {
+  const secret = generateAdminSecret();
+  const recoveryCode = generateAdminSecret();
+  return {
+    secret,
+    recoveryCode,
+    admin: {
+      secretHash: await hashAdminSecret(secret),
+      sessionSecret: base64urlEncode(crypto.getRandomValues(new Uint8Array(SESSION_SECRET_BYTES))),
+      recoveryHash: await hashAdminSecret(recoveryCode),
+      nowIso,
+    },
+  };
+}
 
 /**
  * The first claim: credentials, claim token hash and recovery hash, together or not at all. True iff this caller's
@@ -87,7 +104,10 @@ export async function reissueClaim(db: D1Database, a: NewAdmin & { claimTokenHas
 export async function recoverAdmin(db: D1Database, a: NewAdmin & { oldRecoveryHash: string }): Promise<boolean> {
   const [swapped] = await db.batch([
     db.prepare(
-      `UPDATE auth_settings SET recovery_hash = ?, recovery_created_at = ?, mode = 'password', changed_at = ?, changed_by = 'recovery',
+      // changed_at and changed_by record the switch away from Access only: the right-hand sides see the old row, so `mode` is the old mode.
+      `UPDATE auth_settings SET recovery_hash = ?, recovery_created_at = ?, mode = 'password',
+         changed_at = CASE WHEN mode = 'access' THEN ? ELSE changed_at END,
+         changed_by = CASE WHEN mode = 'access' THEN 'recovery' ELSE changed_by END,
          claim_token_hash = NULL
        WHERE id = 1 AND recovery_hash = ?`,
     ).bind(a.recoveryHash, a.nowIso, a.nowIso, a.oldRecoveryHash),

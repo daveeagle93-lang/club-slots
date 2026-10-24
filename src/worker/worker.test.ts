@@ -14,19 +14,27 @@ let t: TestEnv;
 beforeAll(async () => { t = await createTestEnv(); });
 afterAll(async () => { await t.dispose(); });
 
-const worker = createWorker({ now: () => NOW });
+/**
+ * A database that fails the test if anything but the guard's one batch read of the sign-in mode and credentials uses it
+ * (it answers that with no rows): an unguarded handler would reach for it. One batch per request, starting with the
+ * auth_settings read; no statement is ever run on its own. `perRequest` below restarts the count for each request.
+ */
+let noDbBatches = 0;
+const refuse = (what: string) => () => { throw new Error(`The database was used (${what})`); };
+const noDb = {
+  batch: async (statements: { sql: string }[]) => {
+    if (++noDbBatches > 1) throw new Error("The database was used (a second batch)");
+    if (!statements[0]?.sql.includes("FROM auth_settings")) throw new Error("The database was used (a batch that does not start with the auth_settings read)");
+    return [{ results: [] }, { results: [] }];
+  },
+  prepare: (sql: string) => ({ sql, bind: refuse("bind"), first: refuse("first"), run: refuse("run"), all: refuse("all"), raw: refuse("raw") }),
+} as unknown as D1Database;
+const perRequest = (w: ReturnType<typeof createWorker>) => ({ fetch: (request: Request, env: AppEnv) => { noDbBatches = 0; return w.fetch(request, env); } });
+
+const worker = perRequest(createWorker({ now: () => NOW }));
 const table = createRoutes();
 const adminRoutes = table.filter((r) => r.access === "admin");
 const PUBLIC_DIR = join(import.meta.dirname, "../../public");
-
-/**
- * A database that fails the test if anything but the guard's one batch read of the sign-in mode and credentials uses it
- * (it answers that with no rows): an unguarded handler would reach for it.
- */
-const noDb = {
-  batch: async () => [{ results: [] }, { results: [] }],
-  prepare: () => ({}),
-} as unknown as D1Database;
 
 /** An ASSETS stub that records every request it is given and answers 200 `asset:<path>`. */
 const recordingAssets = () => {
@@ -39,6 +47,30 @@ const send = (env: AppEnv, path: string, init: RequestInit = {}) => worker.fetch
 
 /** The path of a route with a made-up value for each :param. */
 const fill = (pattern: string) => pattern.replace(/:\w+/g, "x");
+
+describe("the noDb stub", () => {
+  const GUARD_READ = "SELECT mode FROM auth_settings WHERE id = 1";
+
+  it("answers the guard's one batch read with no rows", async () => {
+    noDbBatches = 0;
+    expect(await noDb.batch([noDb.prepare(GUARD_READ), noDb.prepare("SELECT secret_hash FROM admin_credentials")])).toEqual([{ results: [] }, { results: [] }]);
+  });
+
+  it("throws on a second batch in one request, on a batch that does not start with the auth_settings read, and on any statement method", async () => {
+    noDbBatches = 0;
+    await noDb.batch([noDb.prepare(GUARD_READ)]);
+    await expect(noDb.batch([noDb.prepare(GUARD_READ)])).rejects.toThrow();
+    noDbBatches = 0;
+    await expect(noDb.batch([noDb.prepare("SELECT 1 FROM events")])).rejects.toThrow();
+    for (const method of ["first", "run", "all", "raw", "bind"]) {
+      expect(() => (noDb.prepare(GUARD_READ) as unknown as Record<string, () => unknown>)[method](), method).toThrow();
+    }
+  });
+
+  it("counts again from zero for each request through the worker", async () => {
+    for (let i = 0; i < 2; i++) expect((await send(await passwordEnv(noDb), "/api/admin/events", { headers: writeHeaders("x") })).status).toBe(401);
+  });
+});
 
 const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const hasSecurityHeaders = (res: Response) => Object.entries(SECURITY_HEADERS).every(([k, v]) => res.headers.get(k) !== null && (k === "Content-Security-Policy" || res.headers.get(k) === v));
@@ -87,7 +119,7 @@ describe("the admin API is guarded whatever the route table says", () => {
 
   it("answers every admin route and method with 401 under the Access provider (login does not exist there: 404 for any method)", async () => {
     const env = { ...accessEnv(noDb), ASSETS: recordingAssets().fetcher };
-    const deaf = createWorker({ now: () => NOW, fetch: (async () => Response.json({ keys: [] })) as unknown as typeof fetch });
+    const deaf = perRequest(createWorker({ now: () => NOW, fetch: (async () => Response.json({ keys: [] })) as unknown as typeof fetch }));
     for (const route of adminRoutes) {
       for (const method of METHODS) {
         const res = await deaf.fetch(new Request(`${ORIGIN}${fill(route.pattern)}`, { method, headers: writeHeaders("anything") }), env);
@@ -141,7 +173,7 @@ describe("the admin pages are guarded whatever is in public/admin/", () => {
   });
 
   it("answers 401 for every page, the login pages included, under the Access provider", async () => {
-    const deaf = createWorker({ now: () => NOW, fetch: (async () => Response.json({ keys: [] })) as unknown as typeof fetch });
+    const deaf = perRequest(createWorker({ now: () => NOW, fetch: (async () => Response.json({ keys: [] })) as unknown as typeof fetch }));
     for (const path of urls) {
       const { seen, fetcher } = recordingAssets();
       const res = await deaf.fetch(new Request(`${ORIGIN}${path}`), { ...accessEnv(noDb), ASSETS: fetcher });

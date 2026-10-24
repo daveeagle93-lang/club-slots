@@ -236,7 +236,7 @@ describe("POST /api/recover: the right code", () => {
   it("works from password mode, with the claim window long over, and with no credentials row at all", async () => {
     await ageWindow(t.env.DB, 24 * 3600_000);
     expect((await post(CODE)).status).toBe(200);
-    expect(await settingsRow()).toMatchObject({ mode: "password", changed_by: "recovery" });
+    expect(await settingsRow()).toMatchObject({ mode: "password", changed_by: null }); // the mode was already password: nothing to record
     await seed();
     await t.env.DB.prepare("DELETE FROM admin_credentials").run();
     const made = await madeOf(await post(CODE));

@@ -1,7 +1,7 @@
 import type { AuthDeps } from "../../server/auth";
-import { claimAdmin, claimCookie, hashClaimToken, newClaimToken, readClaimToken, reissueClaim, type NewAdmin } from "../../server/auth/claim";
+import { claimAdmin, claimCookie, hashClaimToken, makeAdmin, newClaimToken, readClaimToken, reissueClaim } from "../../server/auth/claim";
 import { saveCredentials } from "../../server/auth/credentials";
-import { base64urlEncode, generateAdminSecret, hashAdminSecret, timingSafeEqual, trimAdminSecret, utf8 } from "../../server/auth/crypto";
+import { timingSafeEqual, trimAdminSecret, utf8 } from "../../server/auth/crypto";
 import { hasSameOrigin } from "../../server/auth/csrf";
 import { clearAttempts, countAttempt, SETUP_GLOBAL_KEY, SETUP_GLOBAL_LIMIT, setupClientKey } from "../../server/auth/ratelimit";
 import { noStore, payloadTooLarge, readJsonObject } from "../../server/bookings";
@@ -12,7 +12,6 @@ import { expectedSetupCode, readSetup, setupCodeMatches, setupNotReadyMessage, t
 const MAX_BODY_BYTES = 1024;
 // Same bound as the admin login: on the raw value (UTF-16 code units, before trimming), and 256 three-byte characters still fit in MAX_BODY_BYTES.
 const MAX_CODE_LENGTH = 256;
-const SESSION_SECRET_BYTES = 32; // 43 base64url characters, over the 32 the session signature needs
 // What newClaimToken makes. Anything else in the cookie is treated as no cookie, before it is hashed.
 const CLAIM_TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -24,22 +23,6 @@ const claimTokenOf = (request: Request): string | null => {
   const token = readClaimToken(request.headers.get("Cookie"));
   return token !== null && CLAIM_TOKEN_SHAPE.test(token) ? token : null;
 };
-
-/** A new admin secret and recovery code of the same kind, with what is stored for them (only salted hashes) and a new session secret. */
-async function makeAdmin(nowIso: string): Promise<{ secret: string; recoveryCode: string; admin: NewAdmin }> {
-  const secret = generateAdminSecret();
-  const recoveryCode = generateAdminSecret();
-  return {
-    secret,
-    recoveryCode,
-    admin: {
-      secretHash: await hashAdminSecret(secret),
-      sessionSecret: base64urlEncode(crypto.getRandomValues(new Uint8Array(SESSION_SECRET_BYTES))),
-      recoveryHash: await hashAdminSecret(recoveryCode),
-      nowIso,
-    },
-  };
-}
 
 /**
  * POST /api/setup: the first-run step of the password provider. Public, so it guards itself: nothing happens unless

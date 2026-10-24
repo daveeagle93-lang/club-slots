@@ -7,7 +7,8 @@ import type { AuthDeps } from "./types";
 export type { AdminAuth, AdminData, AdminSession, AuthDeps } from "./types";
 export type { PasswordAuth } from "./password";
 
-const ACCESS_UNUSABLE = "ACCESS_TEAM_DOMAIN must be a cloudflareaccess.com host and ACCESS_AUD must be set";
+const ACCESS_UNUSABLE_ENV = "ACCESS_TEAM_DOMAIN must be a cloudflareaccess.com host and ACCESS_AUD must be set";
+const ACCESS_UNUSABLE_STORED = "the stored Access settings in auth_settings are unusable (team domain or AUD)";
 
 /**
  * The one admin authenticator. Fails closed: an ADMIN_AUTH value other than "access", "password" or unset, or settings the
@@ -27,16 +28,16 @@ export async function adminAuthFor(
 ): Promise<{ auth: AccessAuth | PasswordAuth } | { error: "not_configured"; reason: string; awaitingSetup?: true }> {
   const fromEnv = envAuthSetting(env);
   if (fromEnv === "invalid") return { error: "not_configured", reason: 'ADMIN_AUTH must be "access" or "password"' };
-  const accessAuth = (settings: Parameters<typeof parseAccessConfig>[0]) => {
+  const accessAuth = (settings: Parameters<typeof parseAccessConfig>[0], unusable: string) => {
     const config = parseAccessConfig(settings);
-    if (!config) return { error: "not_configured" as const, reason: ACCESS_UNUSABLE };
+    if (!config) return { error: "not_configured" as const, reason: unusable };
     return { auth: (deps ? createAccessAuth(config, deps) : sharedAccessAuth(config)) };
   };
-  if (fromEnv === "access") return accessAuth(env);
+  if (fromEnv === "access") return accessAuth(env, ACCESS_UNUSABLE_ENV);
 
   const { settings, credentials: stored } = await loadAuthState(env.DB);
   if (settings.mode === "access") {
-    return accessAuth({ ACCESS_TEAM_DOMAIN: settings.accessTeamDomain ?? undefined, ACCESS_AUD: settings.accessAud ?? undefined });
+    return accessAuth({ ACCESS_TEAM_DOMAIN: settings.accessTeamDomain ?? undefined, ACCESS_AUD: settings.accessAud ?? undefined }, ACCESS_UNUSABLE_STORED);
   }
   if (envCredentialsSet(env)) {
     const config = parsePasswordConfig(env);

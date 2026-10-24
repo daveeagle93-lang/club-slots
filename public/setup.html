@@ -18,7 +18,7 @@
       <h1>Set up admin sign-in</h1>
       <p id="page-error" class="form-error" role="alert"></p>
       <form id="setup-form" method="post" novalidate hidden>
-        <p>Enter the setup code you chose when you deployed this site. You will then be shown your admin secret and a recovery code.</p>
+        <p>Enter the setup code: the SETUP_CODE you set as a Worker secret. You will then be shown your admin secret and a recovery code.</p>
         <div class="field">
           <label for="code">Setup code</label>
           <input id="code" name="code" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off" maxlength="256" required />
@@ -42,7 +42,7 @@
         <p>Admin secret: you sign in with this.</p>
         <p id="secret" class="secret"></p>
         <button type="button" id="copy" class="button">Copy admin secret</button>
-        <p>Recovery code: if you lose the admin secret, this lets you make a new one.</p>
+        <p>Recovery code: if you lose the admin secret, this lets you make a new one. Use the recovery code on this site's /recover page.</p>
         <p id="recovery" class="secret"></p>
         <button type="button" id="copy-recovery" class="button">Copy recovery code</button>
         <p id="copy-status" class="copy-status" role="status"></p>

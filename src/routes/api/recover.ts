@@ -1,6 +1,6 @@
 import type { AuthDeps } from "../../server/auth";
-import { recoverAdmin } from "../../server/auth/claim";
-import { base64urlEncode, generateAdminSecret, hashAdminSecret, parseAdminSecretHash, trimAdminSecret, verifyAdminSecret } from "../../server/auth/crypto";
+import { makeAdmin, recoverAdmin } from "../../server/auth/claim";
+import { parseAdminSecretHash, trimAdminSecret, verifyAdminSecret } from "../../server/auth/crypto";
 import { hasSameOrigin } from "../../server/auth/csrf";
 import { envCredentialsSet } from "../../server/auth/password";
 import { clearAttempts, countAttempt, recoveryClientKey } from "../../server/auth/ratelimit";
@@ -12,7 +12,6 @@ import { errorResponse, json } from "../../server/http";
 const MAX_BODY_BYTES = 1024;
 // Same bound as setup and the admin login: on the raw value (UTF-16 code units, before trimming), and 256 three-byte characters still fit in MAX_BODY_BYTES.
 const MAX_CODE_LENGTH = 256;
-const SESSION_SECRET_BYTES = 32; // 43 base64url characters, over the 32 the session signature needs
 
 const notFound = (): Response => errorResponse(404, "not_found", "Not found.", {}, noStore);
 
@@ -59,15 +58,8 @@ export const createRecoverHandler = (deps: AuthDeps = {}): RouteHandler => async
       return errorResponse(401, "invalid_recovery_code", "That recovery code isn't right.", {}, noStore);
     }
 
-    const secret = generateAdminSecret();
-    const recoveryCode = generateAdminSecret();
-    const recovered = await recoverAdmin(env.DB, {
-      secretHash: await hashAdminSecret(secret),
-      sessionSecret: base64urlEncode(crypto.getRandomValues(new Uint8Array(SESSION_SECRET_BYTES))),
-      recoveryHash: await hashAdminSecret(recoveryCode),
-      nowIso: new Date(now).toISOString(),
-      oldRecoveryHash: storedHash,
-    });
+    const { secret, recoveryCode, admin } = await makeAdmin(new Date(now).toISOString());
+    const recovered = await recoverAdmin(env.DB, { ...admin, oldRecoveryHash: storedHash });
     if (!recovered) return errorResponse(409, "recovery_code_used", "That recovery code has already been used.", {}, noStore);
     try {
       await clearAttempts(env.DB, key);

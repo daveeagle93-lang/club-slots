@@ -92,7 +92,7 @@ export function createRoutes(deps?: AuthDeps): Route[] {
     // Recovery with the recovery code. Public, so it guards itself (src/routes/api/recover.ts): 404 unless a recovery code is stored.
     { method: "POST", pattern: "/api/recover", handler: createRecoverHandler(deps), access: "public" },
     { method: "GET", pattern: "/api/settings", handler: publicSettings, access: "public" },
-    // First-run admin setup. Public, so it guards itself (src/server/setup.ts): 404 unless setup is open. GET only reports the state.
+    // First-run admin setup. Public, so it guards itself (src/server/setup.ts): 404 unless setup is open, claim or claimed. GET only reports the state.
     { method: "GET", pattern: "/api/setup", handler: createSetupStatusHandler(deps), access: "public" },
     { method: "POST", pattern: "/api/setup", handler: createSetupHandler(deps), access: "public" },
     { method: "*", pattern: "/api/theme.css", handler: themeCss, access: "public" },

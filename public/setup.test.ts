@@ -92,6 +92,7 @@ describe("setup page markup", () => {
     expect(html).toMatch(/<button[^>]*>Continue<\/button>/);
     expect(html).toContain("Both are shown only this once");
     expect(html).toContain("If you run setup again before you first sign in, both are replaced");
+    expect(html).toContain("Recovery code: if you lose the admin secret, this lets you make a new one. Use the recovery code on this site's /recover page.");
     for (const id of ["setup-form", "claim-step", "taken-step", "secret-step"]) expect(html).toMatch(new RegExp(`id="${id}"[^>]*\\bhidden\\b`));
     expect(html).not.toContain(SECRET);
     expect(html).not.toContain(RECOVERY);
