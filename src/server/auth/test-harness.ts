@@ -28,18 +28,26 @@ export const d1Env = (db: D1Database, over: Partial<AppEnv> = {}): AppEnv => ({ 
 /**
  * The database, except that a statement whose SQL matches `match` first awaits `hook` each time it runs: lets a test slip
  * another request in between two steps of one handler (an interleaving at the SQL level). Only the methods the handlers use.
+ * In a batch, the hook of each matching statement runs just before the whole batch, which is as close to "just before
+ * that statement" as a transactional batch allows.
  */
 export function beforeStatement(db: D1Database, match: RegExp, hook: () => Promise<void>): D1Database {
+  const real = Symbol("real");
   const wrap = (stmt: D1PreparedStatement): D1PreparedStatement => ({
+    [real]: stmt,
     bind: (...values: unknown[]) => wrap(stmt.bind(...values)),
     run: async () => { await hook(); return stmt.run(); },
     first: async (column?: string) => { await hook(); return column === undefined ? stmt.first() : stmt.first(column); },
     all: async () => { await hook(); return stmt.all(); },
     raw: async () => { await hook(); return stmt.raw(); },
   }) as unknown as D1PreparedStatement;
+  const unwrap = (stmt: D1PreparedStatement): D1PreparedStatement => (stmt as unknown as Record<symbol, D1PreparedStatement>)[real] ?? stmt;
   return {
     prepare: (sql: string) => (match.test(sql) ? wrap(db.prepare(sql)) : db.prepare(sql)),
-    batch: (statements: D1PreparedStatement[]) => db.batch(statements),
+    batch: async (statements: D1PreparedStatement[]) => {
+      for (const stmt of statements) if ((stmt as unknown as Record<symbol, unknown>)[real] !== undefined) await hook();
+      return db.batch(statements.map(unwrap));
+    },
   } as unknown as D1Database;
 }
 /** An environment with no ADMIN_AUTH and no SETUP_CODE, as on a fresh zero-config deployment. */

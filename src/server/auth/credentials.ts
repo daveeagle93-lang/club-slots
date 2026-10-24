@@ -17,8 +17,9 @@ export async function loadCredentials(db: D1Database): Promise<StoredCredentials
 
 /**
  * Stores the credentials made on /setup, replacing earlier ones, in one statement that does nothing once the first
- * sign-in is recorded. False means it did nothing (setup has just been closed by a sign-in). With `recoveryHash`, the
- * same batch stores it too, but only if the credentials written are this caller's.
+ * sign-in is recorded. False means it did nothing (setup has just been closed by a sign-in). When it does write, the
+ * same batch revokes the claim token (so a stale claim cookie cannot overwrite these credentials) and, with
+ * `recoveryHash`, stores that too; both only if the credentials written are this caller's.
  */
 export async function saveCredentials(
   db: D1Database,
@@ -30,14 +31,14 @@ export async function saveCredentials(
      WHERE admin_credentials.first_login_at IS NULL
      RETURNING id`,
   ).bind(secretHash, sessionSecret, createdAt);
-  if (recoveryHash === undefined) return (await upsert.first()) !== null;
+  // The salted secret hash proves the row above is this caller's; a closed or lost setup leaves auth_settings alone.
+  const guard = "WHERE id = 1 AND EXISTS (SELECT 1 FROM admin_credentials WHERE secret_hash = ? AND first_login_at IS NULL)";
   const [saved] = await db.batch([
     upsert,
-    // The salted secret hash proves the row above is this caller's; a closed or lost setup leaves the recovery hash alone.
-    db.prepare(
-      `UPDATE auth_settings SET recovery_hash = ?, recovery_created_at = ?
-       WHERE id = 1 AND EXISTS (SELECT 1 FROM admin_credentials WHERE secret_hash = ? AND first_login_at IS NULL)`,
-    ).bind(recoveryHash, createdAt, secretHash),
+    recoveryHash === undefined
+      ? db.prepare(`UPDATE auth_settings SET claim_token_hash = NULL ${guard}`).bind(secretHash)
+      : db.prepare(`UPDATE auth_settings SET claim_token_hash = NULL, recovery_hash = ?, recovery_created_at = ? ${guard}`)
+        .bind(recoveryHash, createdAt, secretHash),
   ]);
   return saved.results.length > 0;
 }

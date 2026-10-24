@@ -81,12 +81,14 @@ export async function reissueClaim(db: D1Database, a: NewAdmin & { claimTokenHas
 /**
  * Recovery with the recovery code, whose stored hash the caller has already verified (`oldRecoveryHash`). Replaces the
  * recovery hash by compare-and-set, so one code works once, then replaces the credentials and puts the sign-in mode back
- * to the password. `first_login_at` is never touched, so setup stays closed. True iff this caller won the compare-and-set.
+ * to the password. It also revokes the claim token, so a stale claim cookie cannot overwrite what was just made.
+ * `first_login_at` is never touched, so setup stays closed. True iff this caller won the compare-and-set.
  */
 export async function recoverAdmin(db: D1Database, a: NewAdmin & { oldRecoveryHash: string }): Promise<boolean> {
   const [swapped] = await db.batch([
     db.prepare(
-      `UPDATE auth_settings SET recovery_hash = ?, recovery_created_at = ?, mode = 'password', changed_at = ?, changed_by = 'recovery'
+      `UPDATE auth_settings SET recovery_hash = ?, recovery_created_at = ?, mode = 'password', changed_at = ?, changed_by = 'recovery',
+         claim_token_hash = NULL
        WHERE id = 1 AND recovery_hash = ?`,
     ).bind(a.recoveryHash, a.nowIso, a.nowIso, a.oldRecoveryHash),
     // Only if the new (salted) recovery hash is the stored one, i.e. the compare-and-set above was this caller's. The WHERE

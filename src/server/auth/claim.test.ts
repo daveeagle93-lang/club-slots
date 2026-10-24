@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestEnv, type TestEnv } from "../../test/db";
 import { generateAdminSecret, hashAdminSecret } from "./crypto";
-import { loadCredentials, markFirstSignIn } from "./credentials";
+import { loadCredentials, markFirstSignIn, saveCredentials } from "./credentials";
 import {
   CLAIM_COOKIE, claimAdmin, claimCookie, hashClaimToken, newClaimToken, readClaimToken, recoverAdmin, reissueClaim,
   type NewAdmin,
@@ -150,6 +150,30 @@ describe("reissueClaim", () => {
     expect([await credentialRows(), await settings()]).toEqual(before);
   });
 
+  it("returns false after a saveCredentials (code flow) replaced the credentials, and the claim token is gone", async () => {
+    const first = await admin(T1);
+    await claimAdmin(t.env.DB, first);
+    const codeFlow = await admin(T2);
+    expect(await saveCredentials(t.env.DB, { secretHash: codeFlow.secretHash, sessionSecret: codeFlow.sessionSecret, createdAt: T2, recoveryHash: codeFlow.recoveryHash })).toBe(true);
+    expect((await settings())?.claim_token_hash).toBeNull();
+
+    expect(await reissueClaim(t.env.DB, { ...(await admin(T3)), claimTokenHash: first.claimTokenHash })).toBe(false);
+    expect(await loadCredentials(t.env.DB)).toEqual({ secretHash: codeFlow.secretHash, sessionSecret: codeFlow.sessionSecret, firstLoginAt: null });
+    expect((await settings())?.recovery_hash).toBe(codeFlow.recoveryHash);
+  });
+
+  it("returns false after recoverAdmin, and the claim token is gone", async () => {
+    const first = await admin(T1);
+    await claimAdmin(t.env.DB, first);
+    const recovered = { ...(await admin(T2)), oldRecoveryHash: first.recoveryHash };
+    expect(await recoverAdmin(t.env.DB, recovered)).toBe(true);
+    expect((await settings())?.claim_token_hash).toBeNull();
+
+    expect(await reissueClaim(t.env.DB, { ...(await admin(T3)), claimTokenHash: first.claimTokenHash })).toBe(false);
+    expect(await loadCredentials(t.env.DB)).toEqual({ secretHash: recovered.secretHash, sessionSecret: recovered.sessionSecret, firstLoginAt: null });
+    expect((await settings())?.recovery_hash).toBe(recovered.recoveryHash);
+  });
+
   it("returns false when nothing has been claimed", async () => {
     expect(await reissueClaim(t.env.DB, await admin())).toBe(false);
     expect(await credentialRows()).toHaveLength(0);
@@ -172,7 +196,7 @@ describe("recoverAdmin", () => {
     expect(await recoverAdmin(t.env.DB, next)).toBe(true);
     expect(await settings()).toMatchObject({
       recovery_hash: next.recoveryHash, recovery_created_at: T3, mode: "password", changed_at: T3, changed_by: "recovery",
-      claim_token_hash: first.claimTokenHash,
+      claim_token_hash: null,
     });
     expect(await loadCredentials(t.env.DB)).toEqual({ secretHash: next.secretHash, sessionSecret: next.sessionSecret, firstLoginAt: T2 });
     expect(await credentialRows()).toHaveLength(1);

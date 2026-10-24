@@ -19,8 +19,10 @@ const S1 = "1".repeat(43);
 const S2 = "2".repeat(43);
 const T1 = "2026-10-05T10:00:00.000Z";
 const T2 = "2026-10-05T11:00:00.000Z";
+const T3 = "2026-10-05T12:00:00.000Z";
 const recovery = () => t.env.DB.prepare("SELECT recovery_hash, recovery_created_at FROM auth_settings WHERE id = 1")
   .first<{ recovery_hash: string | null; recovery_created_at: string | null }>();
+const claimToken = () => t.env.DB.prepare("SELECT claim_token_hash FROM auth_settings WHERE id = 1").first<{ claim_token_hash: string | null }>();
 const raw = () => t.env.DB.prepare("SELECT * FROM admin_credentials").all();
 
 describe("loadCredentials", () => {
@@ -83,6 +85,28 @@ describe("saveCredentials", () => {
     expect(await saveCredentials(t.env.DB, { secretHash: H2, sessionSecret: S2, createdAt: T2, recoveryHash: attempt })).toBe(false);
     expect((await raw()).results).toEqual(before);
     expect(await recovery()).toEqual({ recovery_hash: recoveryHash, recovery_created_at: T1 });
+  });
+});
+
+describe("saveCredentials and the claim token", () => {
+  const setToken = () => t.env.DB.prepare("UPDATE auth_settings SET claim_token_hash = 'tokenhash' WHERE id = 1").run();
+
+  it("revokes the claim token when it writes the credentials, with or without a recovery hash", async () => {
+    await setToken();
+    expect(await saveCredentials(t.env.DB, { secretHash: H1, sessionSecret: S1, createdAt: T1 })).toBe(true);
+    expect(await claimToken()).toEqual({ claim_token_hash: null });
+    await setToken();
+    expect(await saveCredentials(t.env.DB, { secretHash: H2, sessionSecret: S2, createdAt: T2, recoveryHash: await hashAdminSecret(generateAdminSecret()) })).toBe(true);
+    expect(await claimToken()).toEqual({ claim_token_hash: null });
+  });
+
+  it("does not clear the claim token when it did nothing (first sign-in recorded)", async () => {
+    await saveCredentials(t.env.DB, { secretHash: H1, sessionSecret: S1, createdAt: T1 });
+    await markFirstSignIn(t.env.DB, H1, T2);
+    await setToken();
+    expect(await saveCredentials(t.env.DB, { secretHash: H2, sessionSecret: S2, createdAt: T3 })).toBe(false);
+    expect(await saveCredentials(t.env.DB, { secretHash: H2, sessionSecret: S2, createdAt: T3, recoveryHash: await hashAdminSecret(generateAdminSecret()) })).toBe(false);
+    expect(await claimToken()).toEqual({ claim_token_hash: "tokenhash" });
   });
 });
 

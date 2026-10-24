@@ -103,8 +103,8 @@ INSERT INTO auth_settings (id, setup_opened_at) VALUES (1, strftime('%Y-%m-%dT%H
 - A later push to the repo redeploys but does not re-run `0019`, so a redeploy does **not** reopen the window.
 - **Existing v1.1 deployments** get the migration when they update. The window opens only for a site with no admin and no `SETUP_CODE`, which is a site that today answers 503 on every admin page. Under Access, with env credentials, or with an admin already signed in, `setupState` is `closed` and the window is irrelevant. Note this in "Upgrading".
 - **Reopening** with no `SETUP_CODE`: someone with the club's Cloudflare account runs one statement in the D1 console (documented in `handover.md`):
-  `UPDATE auth_settings SET setup_opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL;`
-  Delete the `admin_credentials` row first if an admin had been made. This is the same trust level as the existing recovery steps.
+  `UPDATE auth_settings SET setup_opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL, recovery_hash = NULL, recovery_created_at = NULL;`
+  Delete the `admin_credentials` row first if an admin had been made. Run the full statement, after deleting that row, whenever the recovery code may be compromised, because an old recovery code still works at any time and can create a new admin in the empty site. This is the same trust level as the existing recovery steps.
 
 ### 3.2 States
 
