@@ -1,11 +1,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { CLAIM_COOKIE, claimCookie, hashClaimToken } from "../../server/auth/claim";
 import { loadCredentials, markFirstSignIn, saveCredentials } from "../../server/auth/credentials";
 import { generateAdminSecret, hashAdminSecret, isCanonicalAdminSecret, parseAdminSecretHash, verifyAdminSecret } from "../../server/auth/crypto";
 import { clientKey, countAttempt, setupClientKey } from "../../server/auth/ratelimit";
-import { beforeStatement, d1Env, NOW, ORIGIN, passwordEnv, SETUP_CODE } from "../../server/auth/test-harness";
+import { ageWindow, beforeStatement, claimEnv, d1Env, NOW, ORIGIN, passwordEnv, SETUP_CODE } from "../../server/auth/test-harness";
 import type { AppEnv } from "../../server/env";
+import { setupNotReadyMessage } from "../../server/setup";
 import { createTestEnv, type TestEnv } from "../../test/db";
-import { createSetupHandler } from "./setup";
+import { createLoginHandler } from "./admin/login";
+import { createSetupHandler, createSetupStatusHandler } from "./setup";
 
 let t: TestEnv;
 let env: AppEnv;
@@ -20,6 +23,8 @@ beforeEach(async () => {
   digest.mockClear();
   await t.env.DB.prepare("DELETE FROM admin_credentials").run();
   await t.env.DB.prepare("DELETE FROM login_attempts").run();
+  await t.env.DB.prepare("UPDATE auth_settings SET mode = 'password', claim_token_hash = NULL, recovery_hash = NULL, recovery_created_at = NULL WHERE id = 1").run();
+  await ageWindow(t.env.DB, 0); // the claim window is open, as on a new deployment
 });
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -45,7 +50,7 @@ describe("POST /api/setup: the right code", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     const body = (await res.json()) as { secret: string };
-    expect(Object.keys(body)).toEqual(["secret"]);
+    expect(Object.keys(body)).toEqual(["secret", "recoveryCode"]);
     expect(body.secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(isCanonicalAdminSecret(body.secret)).toBe(true);
 
@@ -300,14 +305,25 @@ describe("POST /api/setup: when it is not open", () => {
     expect((await post(null, { headers: { Origin: null, "Content-Type": "text/plain" }, body: "junk" })).status).toBe(404);
   });
 
-  it("answers 503 setup_not_ready, and writes and counts nothing, when SETUP_CODE is missing or shorter than 12 characters", async () => {
-    for (const code of [undefined, "", "   ", "short", "12345678901", "  12345678901  "]) {
+  it("answers 503 setup_not_ready with the short-code text, and writes and counts nothing, when SETUP_CODE is shorter than 12 characters", async () => {
+    for (const code of ["short", "12345678901", "  12345678901  "]) {
       const res = await post("12345678901", { env: d1Env(t.env.DB, { SETUP_CODE: code }) });
       expect(res.status, JSON.stringify(code)).toBe(503);
       expect(res.headers.get("cache-control")).toBe("no-store");
-      const text = JSON.stringify(await res.json());
-      expect(text).toContain("setup_not_ready");
-      expect(text).not.toContain("12345678901");
+      const body = (await res.json()) as { error: { code: string; message: string } };
+      expect(body.error).toEqual({ code: "setup_not_ready", message: setupNotReadyMessage("short_code") });
+      expect(JSON.stringify(body)).not.toContain("12345678901");
+    }
+    expect(await rowOf()).toBeNull();
+    await untouched();
+  });
+
+  it("answers 503 setup_not_ready with the expired text when there is no SETUP_CODE and the claim window has run out", async () => {
+    await ageWindow(t.env.DB, 31 * 60_000);
+    for (const code of [undefined, "", "   "]) {
+      const res = await post("12345678901", { env: d1Env(t.env.DB, { SETUP_CODE: code }) });
+      expect(res.status, JSON.stringify(code)).toBe(503);
+      expect(await res.json()).toEqual({ error: { code: "setup_not_ready", message: setupNotReadyMessage("expired") } });
     }
     expect(await rowOf()).toBeNull();
     await untouched();
@@ -375,10 +391,317 @@ describe("recovery: deleting the row reopens setup", () => {
     expect((await post(SETUP_CODE)).status).toBe(404);
 
     await t.env.DB.prepare("DELETE FROM admin_credentials").run();
+    await ageWindow(t.env.DB, 31 * 60_000); // no SETUP_CODE and no window: nothing can be made from the web
     expect((await post(SETUP_CODE, { env: d1Env(t.env.DB, { SETUP_CODE: undefined }) })).status).toBe(503);
     expect((await post("not-the-code-at-all")).status).toBe(401);
     const fresh = await secretOf(await post(SETUP_CODE));
     expect(fresh).not.toBe(old);
     expect(await verifyAdminSecret(old, parseAdminSecretHash((await rowOf())!.secretHash)!)).toBe(false);
+  });
+});
+
+describe("POST /api/setup: the code flow also makes a recovery code", () => {
+  it("returns it once, and stores only its hash, which verifies and is not the secret's", async () => {
+    const res = await post(SETUP_CODE);
+    const { secret, recoveryCode } = (await res.json()) as { secret: string; recoveryCode: string };
+    expect(recoveryCode).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(isCanonicalAdminSecret(recoveryCode)).toBe(true);
+    expect(recoveryCode).not.toBe(secret);
+    const settings = (await settingsRow())!;
+    expect(settings.recovery_created_at).toBe(new Date(NOW).toISOString());
+    expect(JSON.stringify(settings)).not.toContain(recoveryCode);
+    expect(await verifyAdminSecret(recoveryCode, parseAdminSecretHash(settings.recovery_hash!)!)).toBe(true);
+    expect(await verifyAdminSecret(secret, parseAdminSecretHash(settings.recovery_hash!)!)).toBe(false);
+  });
+
+  it("replaces the recovery code when it is run again", async () => {
+    const first = ((await (await post(SETUP_CODE)).json()) as { recoveryCode: string }).recoveryCode;
+    const second = ((await (await post(SETUP_CODE)).json()) as { recoveryCode: string }).recoveryCode;
+    const stored = parseAdminSecretHash((await settingsRow())!.recovery_hash!)!;
+    expect(await verifyAdminSecret(second, stored)).toBe(true);
+    expect(await verifyAdminSecret(first, stored)).toBe(false);
+  });
+});
+
+// The claim tests use the real clock: the window is computed from the stored opening time against it.
+const claimHandler = createSetupHandler();
+const statusHandler = createSetupStatusHandler();
+const loginHandler = createLoginHandler();
+const claimDb = () => claimEnv(t.env.DB);
+const settingsRow = async () => t.env.DB.prepare("SELECT claim_token_hash, recovery_hash, recovery_created_at FROM auth_settings WHERE id = 1")
+  .first<{ claim_token_hash: string | null; recovery_hash: string | null; recovery_created_at: string | null }>();
+const credentialRows = async () => (await t.env.DB.prepare("SELECT * FROM admin_credentials").all()).results;
+
+const claimPost = (over: { env?: AppEnv; headers?: Record<string, string | null>; body?: string; cookie?: string } = {}) => {
+  const headers: Record<string, string> = { Origin: ORIGIN, "Content-Type": "application/json" };
+  if (over.cookie !== undefined) headers.Cookie = `${CLAIM_COOKIE}=${over.cookie}`;
+  for (const [k, v] of Object.entries(over.headers ?? {})) { if (v === null) delete headers[k]; else headers[k] = v; }
+  const request = new Request(`${ORIGIN}/api/setup`, { method: "POST", headers, body: over.body ?? "{}" });
+  return claimHandler({ request, env: over.env ?? claimDb(), params: {}, data: {} });
+};
+const statusGet = (over: { env?: AppEnv; cookie?: string } = {}) => {
+  const headers: Record<string, string> = {};
+  if (over.cookie !== undefined) headers.Cookie = `${CLAIM_COOKIE}=${over.cookie}`;
+  return statusHandler({ request: new Request(`${ORIGIN}/api/setup`, { headers }), env: over.env ?? claimDb(), params: {}, data: {} });
+};
+const login = (secret: string) => loginHandler({
+  request: new Request(`${ORIGIN}/api/admin/login`, {
+    method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", "CF-Connecting-IP": newIp() }, body: JSON.stringify({ password: secret }),
+  }),
+  env: claimDb(), params: {}, data: {},
+});
+interface Made { secret: string; recoveryCode: string }
+const tokenOf = (res: Response) => new RegExp(`^${CLAIM_COOKIE}=([A-Za-z0-9_-]{43});`).exec(res.headers.get("set-cookie") ?? "")?.[1] ?? null;
+/** A finished claim: its response body and the cookie token. */
+const claimed = async (): Promise<Made & { token: string }> => {
+  const res = await claimPost();
+  expect(res.status).toBe(200);
+  return { ...((await res.json()) as Made), token: tokenOf(res)! };
+};
+const ALREADY = { error: { code: "already_set_up", message: "This site has already been set up. Sign in instead." } };
+
+describe("POST /api/setup: the claim (no SETUP_CODE, window open)", () => {
+  it("answers 200 with a secret and a recovery code of 43 characters, stores only their hashes, and sets the claim cookie", async () => {
+    const res = await claimPost();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = (await res.json()) as Made;
+    expect(Object.keys(body)).toEqual(["secret", "recoveryCode"]);
+    expect(body.secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(body.recoveryCode).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(body.secret).not.toBe(body.recoveryCode);
+
+    const token = tokenOf(res)!;
+    expect(token).not.toBeNull();
+    expect(res.headers.get("set-cookie")).toBe(claimCookie(token));
+    expect(res.headers.get("set-cookie")).toBe(`__Host-sb_claim=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400`);
+
+    const [row] = (await credentialRows()) as { secret_hash: string; session_secret: string; first_login_at: string | null }[];
+    expect(await verifyAdminSecret(body.secret, parseAdminSecretHash(row.secret_hash)!)).toBe(true);
+    expect(row.first_login_at).toBeNull();
+    const settings = (await settingsRow())!;
+    expect(await verifyAdminSecret(body.recoveryCode, parseAdminSecretHash(settings.recovery_hash!)!)).toBe(true);
+    expect(settings.claim_token_hash).toBe(await hashClaimToken(token));
+    // None of the three bearer values is stored as it is.
+    const stored = JSON.stringify([row, settings]);
+    for (const v of [body.secret, body.recoveryCode, token]) expect(stored).not.toContain(v);
+  });
+
+  it("needs no code and ignores anything in the body", async () => {
+    expect((await claimPost({ body: JSON.stringify({ code: "anything at all", other: 1 }) })).status).toBe(200);
+  });
+
+  it("does not count towards any attempt limit", async () => {
+    await claimed();
+    await claimPost();
+    await claimPost();
+    expect(await allAttempts()).toEqual([]);
+  });
+
+  it("answers 409 already_set_up to a second claim without the cookie, and changes nothing", async () => {
+    await claimed();
+    const before = [await credentialRows(), await settingsRow()];
+    const res = await claimPost();
+    expect(res.status).toBe(409);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(await res.json()).toEqual(ALREADY);
+    expect([await credentialRows(), await settingsRow()]).toEqual(before);
+  });
+
+  it("answers the same 409 to a cookie that is the wrong token or not shaped like one, and hashes nothing for the latter", async () => {
+    await claimed();
+    const before = [await credentialRows(), await settingsRow()];
+    const wrong = "A".repeat(43);
+    expect(await (await claimPost({ cookie: wrong })).json()).toEqual(ALREADY);
+    const digestSpy = vi.spyOn(crypto.subtle, "digest");
+    for (const bad of ["x", "A".repeat(42), "A".repeat(44), `${"A".repeat(42)}=`, `${"A".repeat(42)}.`, `${"A".repeat(42)}%`, "é".repeat(43)]) {
+      digestSpy.mockClear();
+      const res = await claimPost({ cookie: bad });
+      expect(res.status, bad).toBe(409);
+      expect(digestSpy, bad).not.toHaveBeenCalled(); // shape checked before any hashing
+    }
+    expect([await credentialRows(), await settingsRow()]).toEqual(before);
+  });
+
+  it("with the cookie, makes a new secret and recovery code; the old ones stop working and the cookie token stays", async () => {
+    const first = await claimed();
+    const res = await claimPost({ cookie: first.token });
+    expect(res.status).toBe(200);
+    const second = (await res.json()) as Made;
+    expect(second.secret).not.toBe(first.secret);
+    expect(second.recoveryCode).not.toBe(first.recoveryCode);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+
+    const [row] = (await credentialRows()) as { secret_hash: string }[];
+    const settings = (await settingsRow())!;
+    expect(await verifyAdminSecret(second.secret, parseAdminSecretHash(row.secret_hash)!)).toBe(true);
+    expect(await verifyAdminSecret(first.secret, parseAdminSecretHash(row.secret_hash)!)).toBe(false);
+    expect(await verifyAdminSecret(second.recoveryCode, parseAdminSecretHash(settings.recovery_hash!)!)).toBe(true);
+    expect(await verifyAdminSecret(first.recoveryCode, parseAdminSecretHash(settings.recovery_hash!)!)).toBe(false);
+    expect(settings.claim_token_hash).toBe(await hashClaimToken(first.token));
+    expect((await login(first.secret)).status).toBe(401);
+    expect((await login(second.secret)).status).toBe(200);
+  });
+
+  it("answers 404, even to the right cookie, once the first sign-in has happened", async () => {
+    const made = await claimed();
+    expect((await login(made.secret)).status).toBe(200);
+    expect((await claimPost({ cookie: made.token })).status).toBe(404);
+  });
+
+  it("lets exactly one of two concurrent claims win, and leaves one matching secret, recovery code and token", async () => {
+    const [a, b] = await Promise.all([claimPost(), claimPost()]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const [win, lose] = a.status === 200 ? [a, b] : [b, a];
+    expect(await lose.json()).toEqual(ALREADY);
+    expect(lose.headers.get("set-cookie")).toBeNull();
+    const made = (await win.json()) as Made;
+    const rows = (await credentialRows()) as { secret_hash: string }[];
+    expect(rows).toHaveLength(1);
+    const settings = (await settingsRow())!;
+    expect(await verifyAdminSecret(made.secret, parseAdminSecretHash(rows[0].secret_hash)!)).toBe(true);
+    expect(await verifyAdminSecret(made.recoveryCode, parseAdminSecretHash(settings.recovery_hash!)!)).toBe(true);
+    expect(settings.claim_token_hash).toBe(await hashClaimToken(tokenOf(win)!));
+  });
+
+  it("refuses a cross-origin POST with 403 and creates nothing", async () => {
+    for (const headers of <Record<string, string | null>[]>[{ Origin: null }, { Origin: "https://evil.example" }, { "Sec-Fetch-Site": "cross-site" }]) {
+      const res = await claimPost({ headers });
+      expect(res.status, JSON.stringify(headers)).toBe(403);
+      expect(res.headers.get("set-cookie")).toBeNull();
+    }
+    expect(await credentialRows()).toEqual([]);
+    expect((await settingsRow())!.claim_token_hash).toBeNull();
+  });
+
+  it("refuses invalid JSON with 400, a non-JSON type with 415 and a body over 1 KiB with 413, creating nothing", async () => {
+    expect((await claimPost({ body: "{nope" })).status).toBe(400);
+    expect((await claimPost({ body: "[]" })).status).toBe(400);
+    expect((await claimPost({ headers: { "Content-Type": "text/plain" } })).status).toBe(415);
+    expect((await claimPost({ body: JSON.stringify({ code: "x".repeat(1100) }) })).status).toBe(413);
+    expect(await credentialRows()).toEqual([]);
+  });
+
+  it("writes nothing to the console: not the secret, the recovery code, the token or anything else", async () => {
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
+    const made = await claimed();
+    await claimPost();
+    await claimPost({ cookie: made.token });
+    await claimPost({ cookie: "junk" });
+    const calls = spies.flatMap((s) => s.mock.calls);
+    expect(calls.flat().map(String).join("\n")).not.toMatch(new RegExp([made.secret, made.recoveryCode, made.token].join("|")));
+    expect(calls).toHaveLength(0);
+  });
+
+  it("answers 500 without the secret when the write fails, and logs only the message", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failing = beforeStatement(t.env.DB, /^INSERT INTO admin_credentials/, async () => { throw new Error("D1 is down"); });
+    const res = await claimPost({ env: claimEnv(failing) });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ error: { code: "internal_error" } });
+    expect(log.mock.calls.flat().map(String)).toEqual(["setup failed:", "D1 is down"]);
+    expect(await credentialRows()).toEqual([]);
+  });
+
+  it("a claim at minute 29 can sign in at minute 31, which closes setup", async () => {
+    await ageWindow(t.env.DB, 29 * 60_000);
+    const made = await claimed();
+    await ageWindow(t.env.DB, 31 * 60_000);
+    const res = await login(made.secret);
+    expect(res.status).toBe(200);
+    const [row] = (await credentialRows()) as { first_login_at: string | null }[];
+    expect(row.first_login_at).not.toBeNull();
+    expect((await statusGet()).status).toBe(404);
+    expect((await claimPost()).status).toBe(404);
+  });
+
+  it("stops claims after the window: 503 with the expired text, and nothing is created", async () => {
+    await ageWindow(t.env.DB, 31 * 60_000);
+    const res = await claimPost();
+    expect(res.status).toBe(503);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toEqual({ error: { code: "setup_not_ready", message: setupNotReadyMessage("expired") } });
+    expect(await credentialRows()).toEqual([]);
+  });
+
+  it("is 404 when closed (env credentials, Access), without reading the request", async () => {
+    const full = await passwordEnv(t.env.DB);
+    expect((await claimPost({ env: full, headers: { Origin: null }, body: "junk" })).status).toBe(404);
+    expect((await claimPost({ env: claimEnv(t.env.DB, { ADMIN_AUTH: "access" }) })).status).toBe(404);
+  });
+
+  it("checks the window before it writes: with the window expired, a claim cookie does not make a claim", async () => {
+    await ageWindow(t.env.DB, 31 * 60_000);
+    expect((await claimPost({ cookie: "A".repeat(43) })).status).toBe(503);
+    expect(await credentialRows()).toEqual([]);
+  });
+});
+
+describe("the setup texts", () => {
+  it("are one pair of exported strings", () => {
+    expect(setupNotReadyMessage("short_code")).toBe("Setup isn't ready: SETUP_CODE must be at least 12 characters.");
+    expect(setupNotReadyMessage("expired")).toBe(
+      "Setup is closed. The first-run window ended, so nobody can create an admin secret from the web any more. To reopen it, set `SETUP_CODE` as a Worker secret (any phrase of 12+ characters) and reload, or see [handover](../handover.md).",
+    );
+  });
+});
+
+describe("GET /api/setup", () => {
+  /** The database seen through a wrapper that records every statement prepared. */
+  const recording = () => {
+    const sql: string[] = [];
+    const db = { prepare: (s: string) => { sql.push(s); return t.env.DB.prepare(s); }, batch: (b: D1PreparedStatement[]) => t.env.DB.batch(b) } as unknown as D1Database;
+    return { sql, db };
+  };
+  const snapshot = async () => JSON.stringify(await Promise.all(["admin_credentials", "auth_settings", "login_attempts"].map(
+    async (table) => (await t.env.DB.prepare(`SELECT * FROM ${table}`).all()).results,
+  )));
+  const count = async () => (await t.env.DB.prepare("SELECT count(*) AS n FROM admin_credentials").first<{ n: number }>())!.n;
+
+  it("never creates credentials or writes anything, in each of its four states", async () => {
+    const check = async (expected: string, env: AppEnv, cookie?: string) => {
+      const rows = await count();
+      const before = await snapshot();
+      const { sql, db } = recording();
+      const res = await statusGet({ env: { ...env, DB: db }, cookie });
+      expect(res.status, expected).toBe(200);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(await res.json()).toEqual({ state: expected });
+      expect(await count()).toBe(rows);
+      expect(await snapshot()).toBe(before);
+      expect(sql.length).toBeGreaterThan(0);
+      for (const s of sql) expect(s, s).toMatch(/^\s*SELECT\b/i);
+    };
+    await check("code", d1Env(t.env.DB));
+    await check("claim", claimDb());
+    expect(await count()).toBe(0);
+    const made = await claimed();
+    await check("reissue", claimDb(), made.token);
+    await check("taken", claimDb());
+    await check("taken", claimDb(), "A".repeat(43));
+    await check("taken", claimDb(), "junk");
+    expect(await count()).toBe(1);
+  });
+
+  it("answers 404 when setup is closed, 503 with the reason's text when it is not ready, and counts nothing", async () => {
+    expect((await statusGet({ env: claimEnv(t.env.DB, { ADMIN_AUTH: "access" }) })).status).toBe(404);
+    const short = await statusGet({ env: claimEnv(t.env.DB, { SETUP_CODE: "short" }) });
+    expect(short.status).toBe(503);
+    expect(await short.json()).toEqual({ error: { code: "setup_not_ready", message: setupNotReadyMessage("short_code") } });
+    await ageWindow(t.env.DB, 31 * 60_000);
+    const expired = await statusGet();
+    expect(expired.status).toBe(503);
+    expect(expired.headers.get("cache-control")).toBe("no-store");
+    expect(await expired.json()).toEqual({ error: { code: "setup_not_ready", message: setupNotReadyMessage("expired") } });
+    expect(await allAttempts()).toEqual([]);
+    expect(await count()).toBe(0);
+  });
+
+  it("answers 'taken' to a claim cookie whose window has run out, and 'reissue' to the owner's, whatever the window", async () => {
+    const made = await claimed();
+    await ageWindow(t.env.DB, 31 * 60_000);
+    expect(await (await statusGet({ cookie: made.token })).json()).toEqual({ state: "reissue" });
+    expect(await (await statusGet()).json()).toEqual({ state: "taken" });
   });
 });

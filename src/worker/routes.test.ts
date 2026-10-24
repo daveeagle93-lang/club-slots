@@ -73,6 +73,7 @@ describe("access", () => {
       "* /api/logo",
       "* /api/manifest.webmanifest",
       "GET /api/settings",
+      "GET /api/setup",
       "POST /api/setup",
       "* /api/theme.css",
       "* /favicon.ico",

@@ -31,7 +31,7 @@ import { onRequestGet as health } from "../routes/api/health";
 import { onRequest as icon } from "../routes/api/icon/[size]";
 import { onRequest as logo } from "../routes/api/logo";
 import { onRequest as manifest } from "../routes/api/manifest.webmanifest";
-import { createSetupHandler } from "../routes/api/setup";
+import { createSetupHandler, createSetupStatusHandler } from "../routes/api/setup";
 import { onRequestGet as publicSettings } from "../routes/api/settings";
 import { onRequest as themeCss } from "../routes/api/theme.css";
 import { onRequest as favicon } from "../routes/favicon.ico";
@@ -89,7 +89,8 @@ export function createRoutes(deps?: AuthDeps): Route[] {
     { method: "*", pattern: "/api/logo", handler: logo, access: "public" },
     { method: "*", pattern: "/api/manifest.webmanifest", handler: manifest, access: "public" },
     { method: "GET", pattern: "/api/settings", handler: publicSettings, access: "public" },
-    // First-run admin setup. Public, so it guards itself (src/server/setup.ts): 404 unless setup is open.
+    // First-run admin setup. Public, so it guards itself (src/server/setup.ts): 404 unless setup is open. GET only reports the state.
+    { method: "GET", pattern: "/api/setup", handler: createSetupStatusHandler(deps), access: "public" },
     { method: "POST", pattern: "/api/setup", handler: createSetupHandler(deps), access: "public" },
     { method: "*", pattern: "/api/theme.css", handler: themeCss, access: "public" },
     { method: "*", pattern: "/favicon.ico", handler: favicon, access: "public" },

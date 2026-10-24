@@ -594,12 +594,12 @@ describe("first-run setup through the Worker", () => {
     expect(seen).toHaveLength(0);
   });
 
-  it("allows only GET and HEAD on /setup, and only POST on /api/setup", async () => {
+  it("allows only GET and HEAD on /setup, and only GET, HEAD and POST on /api/setup", async () => {
     const env = fresh();
     for (const method of ["POST", "PUT", "DELETE"]) expect((await send(env, "/setup", { method })).status, method).toBe(405);
     expect((await send(env, "/setup", { method: "POST" })).headers.get("allow")).toBe("GET, HEAD");
-    for (const method of ["GET", "PUT", "DELETE"]) expect((await send(env, "/api/setup", { method })).status, method).toBe(405);
-    expect((await send(env, "/api/setup", { method: "GET" })).headers.get("allow")).toBe("POST");
+    for (const method of ["PUT", "DELETE"]) expect((await send(env, "/api/setup", { method })).status, method).toBe(405);
+    expect((await send(env, "/api/setup", { method: "PUT" })).headers.get("allow")).toBe("GET, HEAD, POST");
   });
 
   it("does not treat variants of the path as the page (no case folding, trailing slash or encoding)", async () => {
