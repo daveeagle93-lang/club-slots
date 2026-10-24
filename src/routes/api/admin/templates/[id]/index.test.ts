@@ -5,6 +5,8 @@ import { onRequestGet as listTemplates, onRequestPost } from "../index";
 import { onRequestDelete, onRequestGet, onRequestPut } from "./index";
 
 const ADMIN = { admin: { identity: "test@example.com", csrfBinding: "x" } };
+// An event date (YYYY-MM-DD) always in the future, so creating an event never trips the "must start in the future" check.
+const FUTURE_DATE = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
 
 let t: TestEnv;
 beforeAll(async () => { t = await createTestEnv(); });
@@ -516,7 +518,7 @@ describe("templates: lanes and capacity on update and in a round trip to an even
       request: new Request("http://localhost/api/admin/events", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idempotencyKey: "template-trip-aaaaaaaa", name: "From template", date: "2026-10-24", start: "09:00", end: "12:00", sessionMinutes: 15, gapMinutes: 0,
+          idempotencyKey: "template-trip-aaaaaaaa", name: "From template", date: FUTURE_DATE, start: "09:00", end: "12:00", sessionMinutes: 15, gapMinutes: 0,
           costPence: 0, venuePostcode: "AB1 2CD", details: "", breaks: [], lanes: fetched.lanes, capacity: fetched.capacity,
         }),
       }),
@@ -585,7 +587,7 @@ describe("templates: the booking form's fields on update and in a round trip to 
       request: new Request("http://localhost/api/admin/events", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idempotencyKey: "template-fields-aaaaaaaa", name: "From template", date: "2026-10-24", start: "09:00", end: "12:00", sessionMinutes: 15, gapMinutes: 0,
+          idempotencyKey: "template-fields-aaaaaaaa", name: "From template", date: FUTURE_DATE, start: "09:00", end: "12:00", sessionMinutes: 15, gapMinutes: 0,
           costPence: 0, venuePostcode: "AB1 2CD", details: "", breaks: [], fields: fetched.fields, identityLimit: fetched.identityLimit,
         }),
       }),
