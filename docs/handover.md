@@ -11,7 +11,7 @@ The app is **one Cloudflare Worker** (`slot-booker` by default) and one D1 datab
 1. The club creates its own Cloudflare account and invites the maintainer, or the maintainer invites the club; either way, the club's owner ends up as a **Super Administrator**.
 2. Deploy the app in the club's account from scratch with the button, from the club's own GitHub or GitLab account ([deploying.md](deploying.md)).
 3. Copy the data across: export from the old database, import into the new one, and check the logo and the numbers match.
-4. Make the new site's admin secret on `/setup` and test the site on its `workers.dev` address.
+4. Make the new site's admin secret and recovery code on its first-run page, and test the site on its `workers.dev` address.
 5. Move the club's address to the new site, and switch admin sign-in to Cloudflare Access if the club wants it.
 6. Only when everything is checked: the maintainer exports a last copy, deletes their own Worker and databases, and leaves the club's account.
 
@@ -23,10 +23,11 @@ Write down where each of these is kept, and who can get at it. Keep them in a pa
 | --- | --- | --- |
 | **The Cloudflare login** (club email, password, any second factor) | Owns the Worker, the database and every setting. | Cloudflare's account recovery, not this app. Hold **Super Administrator** on two people, and make the account email one that more than one person can read. |
 | **The GitHub or GitLab account** that holds the club's copy | Source of the code and its updates. | The live site keeps running. Updates and redeploys need access to it. |
-| **The `SETUP_CODE`** (12+ characters) | Needed once, to make the admin secret, and again after a recovery. | Set a new one (a Worker secret). It has no other use, and may be left in place. |
-| **The admin secret** (43 characters) | Signs admins in. Shown once on `/setup`. Only its hash is stored. | Recover it: [If the admin secret is lost](#if-the-admin-secret-is-lost). |
+| **The admin secret** (43 characters) | Signs admins in. Shown once on the first-run page. Only its hash is stored. | Make a new one with the recovery code: [If the admin secret is lost](#if-the-admin-secret-is-lost). |
+| **The recovery code** (43 characters) | Shown once, next to the admin secret. Makes a new admin secret on the site's `/recover` page, at any time. Only its hash is stored. Keep it as a separate entry from the admin secret. | If you still have the admin secret, nothing is lost yet, but you have no safety net: ask for a new pair as in [If the admin secret is lost](#if-the-admin-secret-is-lost). If both are lost, use the `SETUP_CODE` or the D1 console, as there. |
+| **The `SETUP_CODE`** (12+ characters), **only if you set one** | Optional. Replaces the 30-minute first-run window with a code, and reopens setup after the window has ended. | Set a new one (a Worker secret). It has no other use, and may be left in place. |
 
-Anyone who holds the Cloudflare login can reset the admin secret, as below. That is by design: account owners already control everything.
+Anyone who holds the recovery code can reset the admin secret on `/recover`, so keep it as safe as the secret. Anyone who holds the Cloudflare login can also reset the admin secret, as below. That is by design: account owners already control everything.
 
 ## Before you start
 
@@ -49,15 +50,15 @@ I couldn't find any documented way to transfer a Worker or a D1 database from on
 
 ### Step B: deploy the app in the club's account
 
-Follow [deploying.md](deploying.md), "Deploy with the button", logged in to the **club's** Cloudflare and GitHub or GitLab accounts, so the club owns the copy. Choose a new `SETUP_CODE`: it is the club's own, not the maintainer's. The deploy creates an empty database with all 18 migrations applied. Do not copy anything from the maintainer's account except the data in Step C.
+Follow [deploying.md](deploying.md), "Deploy with the button", logged in to the **club's** Cloudflare and GitHub or GitLab accounts, so the club owns the copy. There is no code to choose: the club makes its own admin secret and recovery code on the new site (see below). The deploy creates an empty database with all 19 migrations applied. Do not copy anything from the maintainer's account except the data in Step C.
 
-Do **not** copy the old admin secret across. It is not in the exported tables below, and the club makes its own on `/setup` (do it now, so you can test the site).
+Do **not** copy the old admin secret across. It is not in the exported tables below, and the club makes its own admin secret and recovery code on the first-run page (do it now, within 30 minutes of the database being created, so you can test the site; the club's owner should be the one who presses the button and saves both).
 
 ### Step C: copy the data across
 
-The data lives in fourteen tables: `events`, `event_layout`, `event_lanes`, `event_fields`, `breaks`, `bookings`, `event_templates`, `event_template_layout`, `event_template_lanes`, `event_template_fields`, `event_template_breaks`, `site_settings`, `site_logo`, `site_icons`. Do **not** copy `admin_credentials` (the old admin secret's hash) or `login_attempts`.
+The data lives in fourteen tables: `events`, `event_layout`, `event_lanes`, `event_fields`, `breaks`, `bookings`, `event_templates`, `event_template_layout`, `event_template_lanes`, `event_template_fields`, `event_template_breaks`, `site_settings`, `site_logo`, `site_icons`. Do **not** copy `admin_credentials` (the old admin secret's hash), `auth_settings` (the sign-in mode and the old recovery code's hash, and the new site's first-run window) or `login_attempts`.
 
-The club's new database already has its tables, because the deploy ran the migrations. So export the old database's **data only**, for those tables, and import it into the new one. The old database must be on the same migrations (all 18): check with `npx wrangler d1 migrations list DB --remote`, and apply any missing ones to the old database first (`npm run db:migrations:apply`), with the old account's login and ids configured.
+The club's new database already has its tables, because the deploy ran the migrations. So export the old database's **data only**, for those tables, and import it into the new one. The old database must be on the same migrations (all 19): check with `npx wrangler d1 migrations list DB --remote`, and apply any missing ones to the old database first (`npm run db:migrations:apply`), with the old account's login and ids configured.
 
 Wrangler finds the database by the binding in `wrangler.json`, which `npm run configure` writes from `account.local.json`. So the export needs the **old** database's id in that file and the old account's login, and the import needs the **new** ones. Do them one after the other and run `npm run configure` each time you change the file ([deploying.md](deploying.md), step 4 of the command-line path).
 
@@ -109,9 +110,32 @@ Only after "Removing the maintainer's access" says you may. Do not delete anythi
 
 ## If the admin secret is lost
 
-This applies to the default sign-in (the password provider, with the secret made on `/setup`). Under Cloudflare Access there is no admin secret to lose.
+This applies to the default sign-in (the password provider, with the secret made on the first-run page). Under Cloudflare Access there is no admin secret to lose; to get back from Access to the password, see "Leaving Access" below.
 
-**If you have not signed in yet:** just open `/setup` again and enter the setup code. It makes a new secret and the old one stops working. Nothing more is needed.
+There are three routes. Use the first one that works for you.
+
+### 1. The recovery code, on `/recover`
+
+If you kept the recovery code that was shown with the admin secret:
+
+1. Open `/recover` on the site (add it to the end of the address).
+2. Type or paste the recovery code and press **Continue**.
+3. The page shows a **new admin secret and a new recovery code**, once. Save both in the password manager (two entries). Tick **I've saved both**, press **Go to sign in** and sign in.
+
+The new secret works at once. The old admin secret and the old recovery code stop working, and every session made with the old secret stops too, because a new session secret is made with it. `/recover` works at any time, with or without the first-run window, and it leaves `/setup` closed.
+
+Things that stop it working:
+
+- **It answers "Not found"** if the site has no stored recovery code (an admin secret made on v1.1 has none, and so has a site whose recovery code was cleared by the statement in route 3), or if `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret. Those override the stored credentials, so there is nothing for `/recover` to replace. Delete those two secrets first (`npx wrangler secret delete <NAME>`), or use route 3.
+- **If your settings have `ADMIN_AUTH=access`**, remove that line first, redeploy, and only then use `/recover`. Otherwise the next Access sign-in puts the Access mode back and undoes the recovery. `/recover` says so when it sees the setting. When the Access mode is stored in the database, a successful recovery switches it back to the password sign-in.
+- **5 wrong tries** from one address in 15 minutes: the page says "Too many attempts" and you must wait. There is no limit across all visitors, on purpose, so nobody else can block you; the limit is per address.
+- A recovery code works once. A second use of the same code answers "That recovery code has already been used."
+
+### 2. `SETUP_CODE`
+
+If there is no recovery code, or it is lost, and you can set a Worker secret:
+
+**If you have not signed in yet:** open `/setup` again. With a `SETUP_CODE` set, enter it: it makes a new secret and recovery code and the old ones stop working. With no `SETUP_CODE`, only the browser that pressed the button (within a day of doing so) can ask for a new pair.
 
 **If you have signed in at least once, `/setup` is closed**, so the stored credentials must be deleted first. You need access to the club's Cloudflare account. Anyone who has it can do this, by design: account owners already control everything.
 
@@ -123,27 +147,42 @@ This applies to the default sign-in (the password provider, with the secret made
      npx wrangler d1 execute DB --remote --command "DELETE FROM admin_credentials"
      ```
 
-2. **Check that `SETUP_CODE` is still set** as a Worker secret. `/setup` needs it. If it has been deleted, or nobody knows it, set a new one (any phrase of 12 or more characters): in the dashboard, the Worker, **Settings**, **Variables and Secrets** (menu names **unverified**), or from a terminal:
+2. **Set `SETUP_CODE`** as a Worker secret (any phrase of 12 or more characters). `/setup` needs it. In the dashboard: the Worker, **Settings**, **Variables and Secrets** (menu names **unverified**), or from a terminal:
 
    ```sh
    npx wrangler secret put SETUP_CODE
    ```
 
-   You do not need the old code. Whether a changed secret applies at once is **unverified**: if `/setup` still says it is not ready, wait a minute and reload.
+   You do not need an old code. Whether a changed secret applies at once is **unverified**: if `/setup` still says it is not ready, wait a minute and reload.
 3. **Do the next step straight away.** Until `/setup` has been run, anyone who knows the setup code could make themselves the admin, and the admin pages redirect to `/setup`.
-4. **Open `/setup`**, enter the setup code, and save the **new** admin secret in the password manager. Tick **I've saved it**, press **Go to sign in** and sign in.
+4. **Open `/setup`**, enter the setup code, and save the **new** admin secret **and the new recovery code** in the password manager. Tick **I've saved both**, press **Go to sign in** and sign in.
 
 What happens next: the new secret works. Every session made with the old secret stops working, because a new session secret is made with it. Once you have signed in, `/setup` closes again. The `SETUP_CODE` may stay in place.
 
-If `/setup` still answers 404 after you delete the row, one of `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret. Then the deployment is in the override mode described below: change the secrets there instead.
+**If the page says "This site has already been set up" but you never saw your admin secret** (the connection dropped, say, or you think someone else pressed the button first), set `SETUP_CODE` as above and reload `/setup`, or run the full reopen statement in route 3.
+
+### 3. The D1 console
+
+If you cannot set a Worker secret, or you want the first-run page back with no code, run this in the D1 console (or with `wrangler d1 execute`, as above). **Delete the `admin_credentials` row first**, if an admin secret was made:
+
+```sql
+DELETE FROM admin_credentials;
+UPDATE auth_settings SET setup_opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL, recovery_hash = NULL, recovery_created_at = NULL;
+```
+
+The second statement starts a new 30-minute first-run window, so open the site's address and make a new admin secret and recovery code. Run the **whole** statement, not a shorter one. It also clears the recovery code, and that matters: an old recovery code still works at any time (it does not need the window), and it can create a new admin in the empty site. So if the recovery code might be known to someone else, it must be cleared too. As soon as the new admin is made, the new recovery code replaces it.
+
+If the site has been left with a stored Access mode and you need the password sign-in back, see "Leaving Access" below.
+
+If `/setup` still answers 404 after you delete the row, one of `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret, or the stored mode is Access. Then the deployment is in the override mode described below, or on Access: change the secrets there instead, or see "Leaving Access".
 
 ## Changing the admin secret, or signing everyone out
 
 Under Access none of this applies.
 
-**Default (secret made on `/setup`).** To change the secret, or to sign everyone out, do the recovery above: delete the row, run `/setup`, sign in with the new secret. That replaces both the secret and the session secret, so nobody stays signed in. Give the new admin secret to the people who stay. The admin session lasts 8 hours (`docs/admin-auth.md`, "Sessions"), so this is also how you remove one admin: there are no individual accounts, only one shared secret.
+**Default (secret made on the first-run page).** To change the secret, or to sign everyone out, do the recovery above, with `/recover` and the recovery code if you have it, or else by deleting the row and running `/setup`. Either replaces both the secret and the session secret, so nobody stays signed in. Give the new admin secret to the people who stay. The admin session lasts 8 hours (`docs/admin-auth.md`, "Sessions"), so this is also how you remove one admin: there are no individual accounts, only one shared secret.
 
-**Override (existing deployments, local development).** If either `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret, the deployment behaves as it did before `/setup` existed and `/setup` is a 404. Both must be valid ([admin-auth.md](admin-auth.md)).
+**Override (existing deployments, local development).** If either `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret, the deployment behaves as it did before `/setup` existed, and `/setup` and `/recover` answer 404. Both must be valid ([admin-auth.md](admin-auth.md)).
 
 | Secret | What it is | Change it to |
 | --- | --- | --- |
@@ -181,10 +220,23 @@ The order matters. Exact variable names and the full click path are in [admin-au
 2. **Create the Access application.** In Zero Trust, "Access controls", "Applications", "Create new application", "Self-hosted and private", then "Add public hostname" with the paths `/admin`, `/admin/*`, `/api/admin` and `/api/admin/*` on the club's hostname ([Self-hosted application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)). Never leave the path empty: that would put the public booking pages behind a login. That one application can hold several paths is the project's assumption, not something Cloudflare's page states, so check it in the dashboard.
 3. **Add an Allow policy** listing the admins' email addresses. Access applications deny everyone by default until an Allow policy matches. Set a short session duration (8 hours or less).
 4. **Turn on the one-time PIN login method**, which emails each admin a single-use code that expires after 10 minutes: "Zero Trust", "Integrations", "Identity providers", "Add new identity provider", "One-time PIN" ([One-time PIN](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)). Cloudflare says a new Zero Trust organisation does not get it automatically, and that an email must match an Access policy before a code is sent. If admins don't receive codes, Cloudflare says to allow mail from `notify.cloudflare.com`.
-5. **Give the app the settings.** Copy the application's AUD tag (Configure the application, then "Additional settings", "Application Audience (AUD) Tag") and your team domain (`<your-team-name>.cloudflareaccess.com`) ([Validate JWTs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)). In the club's own copy of `wrangler.jsonc`, change the top-level `vars` to `ADMIN_AUTH` = `access` and add `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`. Config `vars` overwrite values set in the dashboard on every deploy unless `keep_vars` is set ([Wrangler docs](https://developers.cloudflare.com/workers/wrangler/commands/workers/)); secrets are never deleted by a deploy.
+5. **Give the app the settings.** Copy the application's AUD tag (Configure the application, then "Additional settings", "Application Audience (AUD) Tag") and your team domain (`<your-team-name>.cloudflareaccess.com`) ([Validate JWTs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)). In the club's own copy of `wrangler.jsonc`, add a top-level `vars` block (the template has none) with `ADMIN_AUTH` = `access`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`. Config `vars` overwrite values set in the dashboard on every deploy unless `keep_vars` is set ([Wrangler docs](https://developers.cloudflare.com/workers/wrangler/commands/workers/)); secrets are never deleted by a deploy.
 6. **Redeploy**: commit and push so Workers Builds redeploys (the button's form says "Every push to your production branch will be deployed automatically"; check the Deployments tab on the Worker's page after your first push), or run `npm run deploy`. Until you redeploy, the site is still using the secret.
 7. **Test** with the checks in [admin-auth.md](admin-auth.md): the admin must ask for Access sign-in, an allowed email must get in, a non-allowed one must be refused, and the public booking pages must still open without any sign-in. It is **unverified** whether the `Cf-Access-Jwt-Assertion` header reaches a Worker that serves static assets (Cloudflare's docs say `ctx.access` is not available for such Workers, [Cloudflare Access for Workers](https://developers.cloudflare.com/workers/configuration/cloudflare-access/), and are silent on the header; the app validates the header itself). If a signed-in admin still gets 401, that is the first thing to suspect. A `503` on admin means a setting is missing or malformed; the logs say which ([deploying.md](deploying.md), "Troubleshooting").
-8. **Turning the secret off.** Setting `ADMIN_AUTH=access` already stops the app using the password: the app never falls back to the other provider's settings, and an old password session cookie is ignored once the site is on Access (`src/server/auth/index.ts`). `/setup` becomes a 404. Keep the stored secret (the `admin_credentials` row, or the two Worker secrets in override mode) for a few days: if Access misbehaves, setting `ADMIN_AUTH` back to `password` in `wrangler.jsonc` and redeploying brings the old secret back. Once you are sure, you can delete the row, or `npx wrangler secret delete <NAME>` for the two override secrets; then going back to the secret means running `/setup` again.
+8. **Let the site record Access, then leave the line or remove it.** Setting `ADMIN_AUTH=access` already stops the app using the password: the app never falls back to the other provider's settings, and an old password session cookie is ignored once the site is on Access (`src/server/auth/index.ts`). `/setup` becomes a 404. The first time an admin signs in through Access, the site also records the Access settings in its database (the `auth_settings` row), which is called pinning. From then on the `ADMIN_AUTH` line is no longer what keeps the site on Access. **Do not remove the line before that first sign-in**: until then, removing it drops the site back to the password sign-in with the old admin secret valid again. After a sign-in through Access, check that `/api/admin/session` shows provider `access`, and only then remove the line if you want to. Keep the stored secret (the `admin_credentials` row, or the two Worker secrets in override mode) for a few days. Once you are sure, you can delete the row, or `npx wrangler secret delete <NAME>` for the two override secrets; then going back to the secret means making one again (see "If the admin secret is lost").
+
+### Leaving Access
+
+Because an unset or `password` `ADMIN_AUTH` leaves the stored mode in charge, editing the line back to `password` no longer leaves Access once the site has been pinned. The ways back:
+
+- **`/recover`** with the recovery code (route 1 above). It sets the stored mode back to `password` and makes a new admin secret and recovery code. If your settings still have `ADMIN_AUTH=access`, remove that line first and redeploy, because it wins over the stored mode.
+- **The D1 console**, after removing any `ADMIN_AUTH=access` line from your settings:
+
+  ```sql
+  UPDATE auth_settings SET mode = 'password', changed_by = 'owner' WHERE id = 1;
+  ```
+
+  The site then uses the admin secret that is stored. If there is none, or it is lost, follow with the routes in "If the admin secret is lost".
 
 Before step 6, make sure the Allow policy holds an email address that someone can actually receive mail on, or nobody will get in.
 
@@ -236,23 +288,24 @@ All data is in one Cloudflare D1 database, `slot-booker-db` by default (the main
 | `event_fields` | The booking form's fields, one row each, `position` 1 to 4 (the order of the form, and the number of the `bookings` column that holds the value), a `label` (1 to 40 characters, unique within the event ignoring case), whether it is `required`, its `max_length` (1 to 80) and whether it is `in_identity`. Existing events have Dog (position 1) and Handler (position 2), both required, 80 characters and in the identity, so their bookings and identity keys are unchanged. The number of fields and the identity set can't change once the event has bookings (`src/server/admin-event-edit.ts`). |
 | `event_template_layout`, `event_template_lanes`, `event_template_fields` | The same for each template (lanes, places, identity limit, fields). An event keeps its own copy, as with the rest of a template. |
 | `bookings` | One row per booking: the event, its **lane**, slot start time and **place** (1 up to the capacity), the booking form's field values (**the value of field *n* of the event is in `value_n`**: for the Dog and Handler form, dog in `value_1` and handler in `value_2`; an unused column is empty), the identity key and its number (what stops the same identity booking more than the limit allows: the keys of the identity fields' values joined with U+001F, numbered from 1), when it was booked, the booking's private token (for its calendar link) and the booking form's idempotency key. The database refuses a second booking of the same place, of the same identity number, or with the same token or idempotency key. |
-| `login_attempts` | Attempt counting (every attempt, right or wrong) for the admin sign-in and for `/setup`: a keyed hash of the client's network address, a count and a time. Never used with Access. |
+| `login_attempts` | Attempt counting (every attempt, right or wrong) for the admin sign-in, for `/setup` with a `SETUP_CODE`, and for `/recover`: a keyed hash of the client's network address, a count and a time. Never used with Access. |
 | `site_settings` | One row: club name, privacy contact name and email, website address and theme colours. |
 | `site_logo` | At most one row: the club logo as an image, with its type, size and checksum. |
 | `site_icons` | Up to three rows (32, 180 and 512 pixels): the app icons drawn from the logo (or with no logo, the default mark) and theme colour, as PNG images. None means the bundled fallback icons are used. |
-| `admin_credentials` | At most one row, made on `/setup`: `secret_hash` (a hash of the admin secret, never the secret), `session_secret`, `created_at` and `first_login_at`. Used only when neither `ADMIN_PASSWORD_HASH` nor `ADMIN_SESSION_SECRET` is set. |
+| `admin_credentials` | At most one row, made on `/setup`: `secret_hash` (a hash of the admin secret, never the secret), `session_secret`, `created_at` and `first_login_at`. Used only when neither `ADMIN_PASSWORD_HASH` nor `ADMIN_SESSION_SECRET` is set, and not when the stored sign-in mode is Access. |
+| `auth_settings` | Exactly one row (`id = 1`): the sign-in `mode` (`password` or `access`) with the team domain, AUD and hostname used when it is `access`, and who last changed it (`changed_by`); `setup_opened_at`, the start of the 30-minute first-run window; `claim_token_hash`, a hash of the token in the claiming browser's cookie; and `recovery_hash`, a hash of the recovery code (never the code), with `recovery_created_at`. It outlives `admin_credentials`, because the recovery code must still work when that row is replaced or deleted. |
 
 **Personal data.** What bookers enter in the booking form (by default a dog's and a handler's names, or whatever the event's fields ask for, up to four values) and the times of their slots in `bookings`; the privacy contact's name and email in `site_settings`; and the pseudonymous address hashes in `login_attempts`, which the app treats as personal data too (`admin-auth.md`, "Rate limiting"). Exports hold all of it. Deleting an event removes its bookings from the live database, but D1's Time Travel backups (see Backups below) can still hold them, and the rows of the old `bookings_legacy` table that migration `0017` dropped, until their retention period ends (7 days on the Workers Free plan, 30 on Paid); the app can't remove them from the backups.
 
-**Secrets.** `SETUP_CODE` is a Worker secret in the Cloudflare account. So are `ADMIN_PASSWORD_HASH` and `ADMIN_SESSION_SECRET`, if the override is used. None is in the repository, and an export does not contain them or carry them to a new account. The admin secret itself is nowhere: only its hash is in `admin_credentials`. `ADMIN_AUTH`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are plain settings in the deployment's configuration (the `vars` in the club's `wrangler.jsonc`), not secrets.
+**Secrets.** `SETUP_CODE`, if one was set, is a Worker secret in the Cloudflare account. So are `ADMIN_PASSWORD_HASH` and `ADMIN_SESSION_SECRET`, if the override is used. None is in the repository, and an export does not contain them or carry them to a new account. The admin secret and the recovery code themselves are nowhere: only their hashes are stored, in `admin_credentials` and `auth_settings`. `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`, and `ADMIN_AUTH` where a club sets it, are plain settings in the deployment's configuration (the `vars` in the club's `wrangler.jsonc`, which the template does not have), not secrets. Nothing sets `ADMIN_AUTH` for a password site: unset means `password`. With Access, the settings are also saved in `auth_settings` after the first Access sign-in.
 
 **Retention.** Nothing is deleted automatically, except old `login_attempts` rows, which are removed as a side effect of later login attempts. Bookings and events are only removed by an admin (checked in `src/server/admin-event-lifecycle.ts`): **Archive** hides the event and keeps all its data; **Delete** removes an event with its bookings, breaks, lanes and layout, permanently; **Clear out past events** (`src/routes/api/admin/events/clear-past.ts`) does the same for the past events you pick, and asks you to type `DELETE`. The booking form's privacy notice says details are kept until an organiser deletes the event, which matches this. Delete old events when you no longer need them.
 
 **Backups.** D1 Time Travel can restore a database to an earlier moment: 7 days back on the Workers Free plan and 30 on Paid ([Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)). `npx wrangler d1 time-travel info <DB>` shows the available range. A restore overwrites the database in place, so use it with care, and it is not a replacement for exports.
 
-**Exports and backups are as sensitive as the admin secret.** A database export or backup (`wrangler d1 export`, the dashboard, a Time Travel copy) contains the `admin_credentials` row: the hash of the admin secret and the key that signs sign-in cookies. Anyone holding a copy could sign in as admin. Keep exports private and delete them when you are done. Deleting the row, or running setup again before the first sign-in, replaces that key and so ends every existing sign-in.
+**Exports and backups are as sensitive as the admin secret.** A database export or backup (`wrangler d1 export`, the dashboard, a Time Travel copy) contains the `admin_credentials` row: the hash of the admin secret and the key that signs sign-in cookies. Anyone holding a copy could sign in as admin. It also holds the hash of the recovery code in `auth_settings`. Keep exports private and delete them when you are done. Deleting the row, or running setup again before the first sign-in, replaces that key and so ends every existing sign-in.
 
-**Free-plan limits worth knowing.** Cloudflare's Workers Free plan allows 100,000 requests a day to the Worker (resetting at 00:00 UTC) and 10 ms of CPU per request. Static files served straight from `public/` are free and unlimited; the Worker handles `/`, `/e/*`, `/api/*`, `/admin`, `/admin/*` and `/setup`. Past the daily limit those requests get a 429 and static files keep working ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/)). D1 on the free plan allows 5 million rows read and 100,000 rows written a day, 5 GB of storage and 10 databases per account ([D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/)). Whether a login fits the 10 ms on real Workers is **unverified** (`admin-auth.md`, "What a login costs").
+**Free-plan limits worth knowing.** Cloudflare's Workers Free plan allows 100,000 requests a day to the Worker (resetting at 00:00 UTC) and 10 ms of CPU per request. Static files served straight from `public/` are free and unlimited; the Worker handles `/`, `/e/*`, `/api/*`, `/admin`, `/admin/*`, `/setup` and `/recover`. Past the daily limit those requests get a 429 and static files keep working ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/)). D1 on the free plan allows 5 million rows read and 100,000 rows written a day, 5 GB of storage and 10 databases per account ([D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/)). Whether a login fits the 10 ms on real Workers is **unverified** (`admin-auth.md`, "What a login costs").
 
 ## Exporting before deleting
 
@@ -273,8 +326,8 @@ This writes the database's structure and contents to a file, including `admin_cr
 
 ## If something goes wrong, and after the handover
 
-- **Admin shows an error or answers 503 after a change.** A setting or secret is missing or malformed. The reason is in the Worker's logs: [deploying.md](deploying.md), "Troubleshooting", shows how to read them. With Access, the quickest way back is to set `ADMIN_AUTH` back to `password` in `wrangler.jsonc` and redeploy (the stored secret must still exist).
-- **The admin secret is lost.** See "If the admin secret is lost".
+- **Admin shows an error or answers 503 after a change.** A setting or secret is missing or malformed. The reason is in the Worker's logs: [deploying.md](deploying.md), "Troubleshooting", shows how to read them. With Access, if the site has never had a sign-in through Access, the quickest way back is to remove the `ADMIN_AUTH` line (or set it to `password`) in `wrangler.jsonc` and redeploy (the stored secret must still exist). Once a sign-in through Access has been recorded, that no longer leaves Access: see "Leaving Access".
+- **The admin secret is lost.** Use the recovery code on `/recover`, or see "If the admin secret is lost".
 - **The new database is wrong or empty.** Don't delete the old one. Import again into a fresh database and check as in Step C.
 - **Something was deleted by mistake.** Time Travel may restore it, if it was within the window (see "Where the data lives"). Act quickly, and ask the maintainer or Cloudflare before restoring, because a restore overwrites the database in place.
 - **Nobody can sign in to the club's Cloudflare account.** This is why more than one person should hold Super Administrator, and why the club's account email should be reachable by more than one person.

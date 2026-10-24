@@ -1,6 +1,6 @@
 # Configuration
 
-The booking API reads two optional settings from the Worker's variables. (The admin sign-in settings, `ADMIN_AUTH`, `SETUP_CODE` and the rest, are separate: see `docs/admin-auth.md`.) They are plain text, not secrets, and both have defaults, so a deployment works without setting either.
+The booking API reads two optional settings from the Worker's variables. (The admin sign-in settings, `ADMIN_AUTH`, `SETUP_CODE` and the rest, are separate: see `docs/admin-auth.md`. Nothing here sets `ADMIN_AUTH` for a password site: unset means `password`, and `SETUP_CODE` is optional.) They are plain text, not secrets, and both have defaults, so a deployment works without setting either.
 
 | Name | Meaning | Default | Example |
 | --- | --- | --- | --- |
@@ -27,7 +27,7 @@ Earlier builds' default notice said the club deletes booking details after the e
 
 ## Setting them
 
-- For a club's own copy of the repo, add them to the `vars` block of `wrangler.jsonc` (it already has `"vars": { "ADMIN_AUTH": "password" }`; add the new names beside it) and deploy again. Values are strings. If the copy also has a preview environment, `env.preview` needs the same `vars` block, because `vars` is not inherited.
+- For a club's own copy of the repo, add them to the `vars` block of `wrangler.jsonc` (the template has no `vars` block, so add one) and deploy again. Values are strings. If the copy also has a preview environment, `env.preview` needs the same `vars` block, because `vars` is not inherited.
 - For the maintainer's deployment, under `vars` in the git-ignored `account.local.json`, then run `npm run configure` (see `docs/deploying.md`):
 
   ```jsonc
@@ -40,11 +40,11 @@ Earlier builds' default notice said the club deletes booking details after the e
 
   ```jsonc
   "vars": { "BOOKING_CUTOFF_OFFSET_MINUTES": "-30" },
-  "previewVars": { "ADMIN_AUTH": "password" },
+  "previewVars": { "BOOKING_CUTOFF_OFFSET_MINUTES": "0" },
   "productionVars": { "ADMIN_AUTH": "access", "ACCESS_TEAM_DOMAIN": "<your-team-name>.cloudflareaccess.com", "ACCESS_AUD": "<the AUD tag>" }
   ```
 
-  The production block gets `vars` plus `productionVars`, and `env.preview` gets `vars` plus `previewVars`. Where a name is in both `vars` and the environment's own object, the environment's value wins in that block only; neither environment sees the other's own variables. `npm run configure` prints the variable names written to each block (never the values).
+  The preview block here needs no `ADMIN_AUTH`: unset means `password`. The production block gets `vars` plus `productionVars`, and `env.preview` gets `vars` plus `previewVars`. Where a name is in both `vars` and the environment's own object, the environment's value wins in that block only; neither environment sees the other's own variables. `npm run configure` prints the variable names written to each block (never the values).
 - Locally, put them in `.dev.vars` (see `.dev.vars.example`). Restart `npm run dev` after changing it.
 
-This project is a Worker with a Wrangler configuration file, and that file is the source of truth for variables: by default a deploy deletes every variable set in the dashboard and sets the ones in the config (`npx wrangler deploy --help`, the `--keep-vars` option, Wrangler 4.147.0). So set deployed variables through the config file (`wrangler.jsonc`, or `account.local.json` and `npm run configure` for the maintainer) and deploy again, rather than in the dashboard, where a later deploy would remove them. Secrets are different: a deploy never deletes them (same help text), so `SETUP_CODE` and the other secrets are set once with `npx wrangler secret put`, and stay. I have not tested what a variable edited in the dashboard looks like after a deploy.
+This project is a Worker with a Wrangler configuration file, and that file is the source of truth for variables: by default a deploy deletes every variable set in the dashboard and sets the ones in the config (`npx wrangler deploy --help`, the `--keep-vars` option, Wrangler 4.147.0). So set deployed variables through the config file (`wrangler.jsonc`, or `account.local.json` and `npm run configure` for the maintainer) and deploy again, rather than in the dashboard, where a later deploy would remove them. Secrets are different: a deploy never deletes them (same help text), so `SETUP_CODE` (if you use one) and the other secrets are set once with `npx wrangler secret put`, and stay. I have not tested what a variable edited in the dashboard looks like after a deploy.

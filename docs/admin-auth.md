@@ -3,54 +3,108 @@
 Everything under `/admin/*` (the pages) and `/api/admin/*` (the API) is for the club's organisers. People who book can't move or cancel bookings; only an admin can. Sign-in is pluggable: one `AdminAuth` interface (`src/server/auth/types.ts`) with two providers, chosen by configuration:
 
 - **`access`**: Cloudflare Access sits in front of the site and the Worker verifies the signed token Access adds. The admin's identity is the verified email address. It needs a custom domain (see the hard rule below).
-- **`password`**: one shared, generated admin secret, checked by the Worker, which then issues a signed session cookie. The identity is the fixed string `admin`. It is the default (`wrangler.jsonc` sets `ADMIN_AUTH=password`), and the option for local development, for previews and for deployments reachable only on `*.workers.dev`. A new deployment makes its secret on the `/setup` page (see "First-run setup").
+- **`password`**: one shared, generated admin secret, checked by the Worker, which then issues a signed session cookie. The identity is the fixed string `admin`. It is the default (an unset `ADMIN_AUTH` means `password`), and the option for local development, for previews and for deployments reachable only on `*.workers.dev`. A new deployment makes its secret, and a recovery code, on the `/setup` page (see "First-run setup").
 
-It fails closed. If `ADMIN_AUTH` is unset, misspelt (`Password`, `none`, ` access`) or the chosen provider's settings are missing or malformed, **every** admin page and `/api/admin/*` request, including paths that don't exist, gets a 503 and a line in the logs saying which setting is wrong. The other provider's settings are never used as a fallback. With the password provider and no admin secret yet, the answer is the same 503, except that a request for an admin page is sent to `/setup` while setup is open (see "First-run setup").
+It fails closed. An **unset** `ADMIN_AUTH` is fine: it means `password`. But if `ADMIN_AUTH` is **set** to anything other than `access` or `password` (misspelt, such as `Password`, `none` or ` access`, or an empty value), or the chosen provider's settings are missing or malformed, **every** admin page and `/api/admin/*` request, including paths that don't exist, gets a 503 and a line in the logs saying which setting is wrong. The other provider's settings are never used as a fallback. With the password provider and no admin secret yet, the answer is the same 503, except that a request for an admin page is sent to `/setup` while setup is open (see "First-run setup").
+
+### Which sign-in a site uses
+
+The site stores its sign-in mode in the database (the `auth_settings` table, one row), and the `ADMIN_AUTH` variable is only an override. In plain words:
+
+| `ADMIN_AUTH` | Stored mode | What the site does |
+| --- | --- | --- |
+| `access` | anything | Access, with `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` taken from the variables, as before (a 503 if they are not usable). The database is not read for this decision. |
+| unset, or `password` | `access` | Access, with the three values (team domain, AUD and hostname) taken from the database. |
+| unset, or `password` | `password` | The password sign-in, as before: the secrets in `ADMIN_PASSWORD_HASH` and `ADMIN_SESSION_SECRET` if set, otherwise the admin secret made on `/setup`. |
+| anything else, including an empty value | anything | A 503 on every admin request. |
+
+The three Access values are taken from one place or the other, never mixed. If the stored mode is `access`, a leftover `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is not used. A preview environment has its own database, so its own stored mode.
 
 ## Hard rule: Access needs a custom domain; `*.workers.dev` uses the password
 
-**`ADMIN_AUTH=access` is only for a deployment served on a custom domain, on a Cloudflare zone you control (one that uses Cloudflare's nameservers). A deployment reachable only on `*.workers.dev`, and every preview deployment, uses `ADMIN_AUTH=password`.**
+**`ADMIN_AUTH=access` is only for a deployment served on a custom domain, on a Cloudflare zone you control (one that uses Cloudflare's nameservers). A deployment reachable only on `*.workers.dev`, and every preview deployment, uses the password sign-in (leave `ADMIN_AUTH` unset, or set it to `password`).**
 
 Why: Cloudflare's self-hosted application guide lists "An active domain on Cloudflare" as a prerequisite and says "Domains must belong to an active zone in your Cloudflare account". A `workers.dev` hostname is not a zone in your account. I haven't found a documented way to put an Access application scoped to `/admin/*` and `/api/admin/*` on one, and I haven't checked whether Cloudflare offers a switch for `workers.dev` hostnames as a whole (the guide was read on 4 October 2026 and does not mention `workers.dev`). A whole-hostname policy would put the public booking pages behind a login too, so it would not be a substitute anyway. (Sources and what was checked: "Cloudflare claims" at the end.)
 
-This is a project rule, not something the Worker checks: with `ADMIN_AUTH=access` on a `workers.dev`-only deployment the Worker starts normally and then answers 401 to every admin request, because no token ever arrives (see "What `workers.dev` does under Access"). The default configuration already follows the rule, because `wrangler.jsonc` sets `ADMIN_AUTH=password`, so a new deployment is safe until someone changes it.
+This is a project rule, not something the Worker checks: with `ADMIN_AUTH=access` on a `workers.dev`-only deployment the Worker starts normally and then answers 401 to every admin request, because no token ever arrives (see "What `workers.dev` does under Access"). The default configuration already follows the rule, because with `ADMIN_AUTH` unset the site uses the password, so a new deployment is safe until someone changes it.
 
 ## Settings
 
 | Name | Secret? | Used by | Meaning |
 | --- | --- | --- | --- |
-| `ADMIN_AUTH` | no | both | `access` or `password`, exactly. Anything else locks admin out. `wrangler.jsonc` sets `password`. |
+| `ADMIN_AUTH` | no | both | `access` or `password`, exactly. Unset means `password`, and `wrangler.jsonc` sets nothing. A value that is **set** to anything else, an empty one included, locks admin out (a 503). `access` wins over the stored mode; unset or `password` leaves the stored mode in charge (see "Which sign-in a site uses"). |
 | `ACCESS_TEAM_DOMAIN` | no | access | Your team's host, such as `your-team.cloudflareaccess.com`. Must match `<name>.cloudflareaccess.com`, because it decides where the signing keys are fetched from. |
 | `ACCESS_AUD` | no | access | The Access application's AUD (audience) tag. |
-| `SETUP_CODE` | **yes** | password | A phrase you choose, at least 12 characters (counted after trimming). Typed once on `/setup` to make the admin secret. Not used once the first sign-in has happened, or when the two settings below are set. Missing or shorter counts as not ready: `/setup` answers 503. |
-| `ADMIN_PASSWORD_HASH` | **yes** | password, override | Optional. `hmac-sha256$<salt>$<mac>`, the hash line from `npm run --silent generate-admin-secret`. Anything else, including the earlier `pbkdf2-sha256$...` format, locks admin out. If this or `ADMIN_SESSION_SECRET` is set, the environment settings apply and `/setup` is 404 (see "First-run setup"). |
+| `SETUP_CODE` | **yes** | password | **Optional.** A phrase you choose, at least 12 characters (counted after trimming). Set, it replaces the 30-minute first-run window: `/setup` then asks for it, to make the admin secret. It also reopens setup after the window has run out. Not used once the first sign-in has happened, or when the two settings below are set. Set but shorter than 12 counts as not ready: `/setup` answers 503. |
+| `ADMIN_PASSWORD_HASH` | **yes** | password, override | Optional. `hmac-sha256$<salt>$<mac>`, the hash line from `npm run --silent generate-admin-secret`. Anything else, including the earlier `pbkdf2-sha256$...` format, locks admin out. If this or `ADMIN_SESSION_SECRET` is set, the environment settings apply and `/setup` is 404 (see "First-run setup"), unless the stored mode is `access`, which beats them. |
 | `ADMIN_SESSION_SECRET` | **yes** | password, override | Optional. At least 32 random characters. Signs the session cookie and keys the login rate-limit hashes. Shorter counts as not configured. |
 
-The three secrets must never be committed or put in `wrangler.jsonc`. Set them as Worker secrets (`npx wrangler secret put <NAME>` asks for the value, so nothing secret goes on the command line; the Deploy button prompts for `SETUP_CODE`). A deploy never deletes or replaces Worker secrets (`npx wrangler deploy --help`: "secrets are never deleted by deployments").
+The three secrets must never be committed or put in `wrangler.jsonc`. Set them as Worker secrets (`npx wrangler secret put <NAME>` asks for the value, so nothing secret goes on the command line). The Deploy button asks for none of them. A deploy never deletes or replaces Worker secrets (`npx wrangler deploy --help`: "secrets are never deleted by deployments").
 
-`ADMIN_AUTH`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are plain variables, and they behave differently: by default a deploy replaces every variable set in the dashboard with the ones in the config file (`--keep-vars` in `npx wrangler deploy --help`). So set them in the config, not the dashboard. In a club's own copy of the repo that means the `vars` block of `wrangler.jsonc`. In the maintainer's copy they go under `productionVars` (they belong to production, not preview) in the git-ignored `account.local.json`, followed by `npm run configure` (see `docs/deploying.md`). Locally, put them in `.dev.vars` (see `.dev.vars.example`) and restart `npm run dev`; only the password provider can be tried locally.
+`ADMIN_AUTH`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are plain variables, and they behave differently: by default a deploy replaces every variable set in the dashboard with the ones in the config file (`--keep-vars` in `npx wrangler deploy --help`). So set them in the config, not the dashboard. In a club's own copy of the repo that means the `vars` block of `wrangler.jsonc`, which the template does not have, so you add it. In the maintainer's copy they go under `productionVars` (they belong to production, not preview) in the git-ignored `account.local.json`, followed by `npm run configure` (see `docs/deploying.md`). Locally, put them in `.dev.vars` (see `.dev.vars.example`) and restart `npm run dev`; only the password provider can be tried locally.
 
 ## Password provider
 
 ### First-run setup
 
-A new deployment has no admin secret, and nobody has to generate one by hand. The person who deployed it chooses a setup code, and the site makes the secret for them on a page of its own.
+A new deployment has no admin secret, and nobody has to generate one by hand. The site makes the secret, and a recovery code, on a page of its own. There are two ways in. With no `SETUP_CODE` set (the default), the site has a **first-run window**; with a `SETUP_CODE` set, `/setup` asks for it instead.
 
-1. Set `SETUP_CODE` as a Worker secret: a phrase of at least 12 characters that you keep to yourself. The Deploy button asks for it. Without it, or with a shorter one, `/setup` answers 503 with a line saying so, and the admin pages answer 503.
-2. Open `/setup` on the site. With no admin secret yet, any admin page sends you there (while setup is open).
-3. Type the code into "Setup code" and tap "Continue". The Worker makes a generated admin secret (the kind described below), and the page shows it **once**. Only a hash of it is stored, with a new session secret, in the `admin_credentials` table (migration `0013`), so it can't be shown again.
-4. Save the secret in a password manager, tick "I've saved it", then tap "Go to sign in". The button stays disabled until the box is ticked.
+**The first-run window (no `SETUP_CODE`).**
 
-Rules:
+1. Open the site's address (not `/setup`). While the window is open, `/` and any admin page send you to `/setup`.
+2. The page says the site has no admin yet. Press "Create my admin secret". Nothing is created by just opening the page: only that button (a `POST`) makes an admin, so a link checker or a preview fetching the address cannot claim the site.
+3. The page shows the **admin secret** and a **recovery code** (the same kind of value, 43 characters), **once**. Only a hash of each is stored: the secret's, with a new session secret, in the `admin_credentials` table (migration `0013`), and the recovery code's in `auth_settings`. They can't be shown again.
+4. Save both in a password manager (two entries, if it allows), tick "I've saved both", then tap "Go to sign in". The button stays disabled until the box is ticked.
 
-- `/setup` stays open until the first successful sign-in. Running it again before then makes a new secret and replaces the old one, which stops working. The page says so.
-- The first successful sign-in on `/admin/login` closes setup for good: `/setup` and `POST /api/setup` answer 404 from then on. The time is stored in `first_login_at`.
+Rules for the window:
+
+- **30 minutes**, counted from when the database was created (the migration that makes `auth_settings`), not from the first visit. The time is computed when read, so nothing runs in the background. A redeploy does not reopen it. The length is fixed in the code and is not a setting.
+- **One winner.** The claim is a single atomic write: if two visitors press the button together, one gets the secret and the other gets 409 "This site has already been set up". No setup is counted or rate-limited, because there is nothing to guess.
+- **The claimed state.** Once the button has been pressed and nobody has signed in yet, the site is in the claimed state. A second visitor sees "This site has already been set up. Sign in instead." The browser that pressed the button holds a claim cookie (`__Host-sb_claim`: a random 256-bit token, `HttpOnly; Secure; SameSite=Strict; Path=/`, valid for 24 hours; only its hash is stored), and with it the page offers a new pair that replaces the first (a closed tab, a lost clipboard). Without the cookie nobody can replace the claim except through `SETUP_CODE`, `/recover` or the database console.
+- **Signing in works after the window has ended.** The window limits only making a first secret. The first successful sign-in on `/admin/login` sets `first_login_at`, and from then on `/setup` and `POST /api/setup` answer 404.
+- **After the window, with nobody claimed.** The site says "Setup is closed" (503) and admin pages answer 503. Reopen it by setting `SETUP_CODE`, or by the database statement in [handover.md](handover.md#if-the-admin-secret-is-lost).
+- **The claim race.** Until the owner presses the button, anyone who finds the site's address within the 30 minutes can press it first (see "Known limits"). Setting `SETUP_CODE` before the first visit turns the window off.
+- Under Access, or with `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` set, `/setup` is 404 and the window does not apply.
+- A site that updates from v1.1 and has no admin and no `SETUP_CODE` gets a window when the new migration runs. A site with an admin who has signed in, or a `SETUP_CODE`, is unaffected.
+
+**With a `SETUP_CODE` (the strict way, and the way to reopen setup).**
+
+1. Set `SETUP_CODE` as a Worker secret: a phrase of at least 12 characters that you keep to yourself. A set code wins over the window. Set but shorter than 12 characters, `/setup` answers 503 with a line saying so, and the admin pages answer 503.
+2. Open `/setup`. With no admin secret yet, any admin page sends you there.
+3. Type the code into "Setup code" and tap "Continue". The page shows the admin secret and the recovery code once, as above.
+
+Rules for the code:
+
+- `/setup` stays open until the first successful sign-in. Running it again before then makes a new secret and a new recovery code and replaces the old ones, which stop working. The page says so.
 - A wrong code gets 401 "That setup code isn't right." After 5 attempts from one client in 15 minutes the next gets 429 with `Retry-After`. The attempts are counted before the code is checked, in the `login_attempts` table with keys of their own (the sign-in count is separate), and a right code clears them. Client addresses are treated as in "Rate limiting".
 - There is also one cap across all visitors together: 30 attempts per 15 minutes, counted under a single fixed key in the same table (it is not derived from `SETUP_CODE` and holds no address). Once it is reached, setup answers 429 to everyone, the right code included, until the window passes (15 minutes after its first attempt). A visitor already refused for passing their own limit adds nothing to it, and a correct setup clears only that visitor's own count, never this one. It exists because someone who changes address between guesses would otherwise get 5 guesses per address.
-- If `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret, the older behaviour applies instead: D1 is never read, both settings must then be valid, one alone is a 503, and `/setup` is 404. See "Setting the secrets by hand".
-- `/setup` is only for the password provider. With `ADMIN_AUTH=access` it is 404.
-- **A database export or backup is as sensitive as the admin secret.** `wrangler d1 export`, the dashboard and Time Travel copies all contain the `admin_credentials` row: the hash of the admin secret and the key that signs sign-in cookies. Anyone holding a copy could sign in as admin (with the key they can sign a cookie for themselves). Keep exports private and delete them when you are done. Deleting the row, or running setup again before the first sign-in, replaces that key, so every existing sign-in stops working. (This is read from the table definition and the code; I haven't looked at an export.)
-- A lost secret can't be recovered, and `/setup` can't be used again after the first sign-in. Deleting the `admin_credentials` row reopens `/setup`; the steps are in [handover.md](handover.md#if-the-admin-secret-is-lost), section "If the admin secret is lost".
+
+**Recovery.** `/recover` is a page on the site where the recovery code makes a new admin secret and a new recovery code. It works at any time, with or without the window, and the old secret and the old recovery code then stop working. Every session made with the old secret stops too, because a new session secret is made. It answers 404 when:
+
+- the site has no stored recovery code (an admin secret made before this version has none, and neither does a site whose recovery hash was cleared), or
+- `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret. They override the stored credentials, so there is nothing for `/recover` to replace. Delete those secrets first, or use the database statement in [handover.md](handover.md#if-the-admin-secret-is-lost).
+
+A wrong code gets 401 "That recovery code isn't right." Attempts are limited to 5 per 15 minutes per client, counted before the check, and there is **no** cap across all clients, on purpose: a global one would let anyone block the owner from the one route meant for the worst day (see "Known limits"). A recovery code can be used once. Using it makes the next one, and of two simultaneous uses of the same code one gets 409 "That recovery code has already been used."
+
+A recovery code exists only for an admin secret made on this version's `/setup`. A site made on v1.1 that has signed in has no recovery code: it keeps whatever recovery it has today (`SETUP_CODE` or the database console).
+
+**Under Access.** If the site has `ADMIN_AUTH=access` in its settings, remove that line first and then use `/recover`. Otherwise the next Access sign-in puts the Access mode back and undoes the recovery. `/recover` itself tells you so when it sees the setting. When the Access mode is stored in the database, a successful recovery switches it back to the password sign-in (`changed_by = 'recovery'`).
+
+Other rules:
+
+- If `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set as a Worker secret, the older behaviour applies instead: both settings must then be valid, one alone is a 503, and `/setup` is 404. The database is read only for the sign-in mode: a stored `access` mode beats these secrets, and the stored credentials are never used. See "Setting the secrets by hand".
+- `/setup` is only for the password provider. With `ADMIN_AUTH=access`, or with the Access mode stored in the database, it is 404.
+- **A database export or backup is as sensitive as the admin secret.** `wrangler d1 export`, the dashboard and Time Travel copies all contain the `admin_credentials` row: the hash of the admin secret and the key that signs sign-in cookies. Anyone holding a copy could sign in as admin (with the key they can sign a cookie for themselves). Keep exports private and delete them when you are done. Deleting the row, or running setup again before the first sign-in, replaces that key, so every existing sign-in stops working. (This is read from the table definition and the code; I haven't looked at an export.) The `auth_settings` row also holds the hash of the recovery code, which is as strong as the code but is another reason to keep exports private.
+- A lost secret can't be read back. Use the recovery code on `/recover`; if that is lost too, deleting the `admin_credentials` row and reopening setup is the last resort. The steps are in [handover.md](handover.md#if-the-admin-secret-is-lost), section "If the admin secret is lost".
+
+**Reopening the claim page by hand.** Someone with the club's Cloudflare account can run this in the D1 console. **Delete the `admin_credentials` row first**, if an admin had been made:
+
+```sql
+DELETE FROM admin_credentials;
+UPDATE auth_settings SET setup_opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL, recovery_hash = NULL, recovery_created_at = NULL;
+```
+
+The second statement starts a new 30-minute window and clears the recovery code too. That matters: an old recovery code still works at any time and can create a new admin in the empty site, so run the whole statement, not a shorter one, whenever the recovery code might be known to someone else.
 
 ### Why a generated secret, not a password
 
@@ -82,7 +136,7 @@ This is the override, for an existing deployment that already has these two secr
    ```
 
    For the preview Worker add `--env preview` to both commands (`-e, --env` is in the help). Without it the secret goes to the production Worker, so don't leave it out. Set both: with only one of them set, admin answers 503, and `/setup` is already closed. Check in the dashboard afterwards that the secrets are listed on the Worker you meant (I haven't checked what the dashboard calls that page).
-4. `ADMIN_AUTH=password` is already set by `wrangler.jsonc`, so there is nothing more to set unless you changed it. In the maintainer's copy it can also come from `vars` (or `previewVars`) in `account.local.json` followed by `npm run configure` (see `docs/configuration.md`). `vars` are not inherited by `env.preview`, so the script writes `vars` into **both** the top-level block and `env.preview` of the generated `wrangler.json`; `previewVars` goes into `env.preview` only. Secrets are separate from `vars`, and each goes to the Worker named by its `--env`.
+4. Nothing sets `ADMIN_AUTH` for a password site: unset means `password`, so there is nothing more to set unless you set it yourself. In the maintainer's copy it can also come from `vars` (or `previewVars`) in `account.local.json` followed by `npm run configure` (see `docs/configuration.md`). `vars` are not inherited by `env.preview`, so the script writes `vars` into **both** the top-level block and `env.preview` of the generated `wrangler.json`; `previewVars` goes into `env.preview` only. Secrets are separate from `vars`, and each goes to the Worker named by its `--env`.
 
 To replace the secret, run the script again and set the new `ADMIN_PASSWORD_HASH`. Existing sessions stay valid until they expire or `ADMIN_SESSION_SECRET` is rotated. A stored value in the earlier `pbkdf2-sha256$...` format is refused as malformed: admin answers 503 and the log line says to run `npm run generate-admin-secret`.
 
@@ -139,7 +193,7 @@ The Access labels below are the ones on Cloudflare's pages when this was written
 4. **Copy the AUD tag and team domain.** Go to "Zero Trust" > "Access controls" > "Applications", select "Configure" for your application and, from "Additional settings", copy the "Application Audience (AUD) Tag" (Cloudflare: it "will never change unless you delete or recreate the Access application"). Your team domain is `<your-team-name>.cloudflareaccess.com`; Cloudflare says the team name is shown in Cloudflare One under "Settings".
 5. **Give the Worker the settings and redeploy.** Use the config file, not the dashboard: a deploy overwrites dashboard variables with the ones in the config (see "Settings"). The values are strings, with the host only for the team domain, no `https://`.
 
-   In a club's own copy of the repo, change `vars` in `wrangler.jsonc`:
+   In a club's own copy of the repo, add a `vars` block to `wrangler.jsonc` (the template has none):
 
    ```jsonc
    "vars": {
@@ -168,7 +222,7 @@ The Access labels below are the ones on Cloudflare's pages when this was written
 
    Run `npm run configure`. It refuses an `account.local.json` that has a database ID that is not a UUID or is a placeholder, the two IDs equal, an unknown key, a variable name that isn't a plain identifier, a value that isn't a string, or a secret (`ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET`: the Access provider uses neither), in `vars`, `productionVars` or `previewVars`. It does not check `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD`; the Worker does at run time and answers 503 on every admin request, logging which setting is wrong, if the team domain isn't a `<name>.cloudflareaccess.com` host or the AUD is empty. Then redeploy production (`npx wrangler deploy`, with no `--env`). With the example above, the preview Worker keeps the password provider, so you can test one before and after switching production to `access`. If you put the Access settings under `vars` instead, the script writes them into `env.preview` too, the preview Worker also expects Access, and admin does not work on it (401).
 
-   Admin secrets made by `/setup` stay in the database after the switch and are simply not used: with `ADMIN_AUTH=access` the password provider is not consulted.
+   Admin secrets made by `/setup` stay in the database after the switch and are simply not used: with `ADMIN_AUTH=access`, or with the Access mode stored (see "After the first Access sign-in: pinning"), the password provider is not consulted.
 6. **Verify.** Replace the hostnames with yours.
 
    ```sh
@@ -180,7 +234,33 @@ The Access labels below are the ones on Cloudflare's pages when this was written
    - The first request has no Access session, so Access should turn it away before the Worker sees it. The Worker's own answer is the JSON `unauthenticated` body shown below, so if you see that body here, Access isn't in front of this path. The status Access itself returns (I'd expect a redirect to your team's login page) is not stated on the pages fetched and is **not verified**.
    - The second and third go to `workers.dev`, where no Access token is attached, so they reach the Worker and are refused by it: 401 with `{"error":{"code":"unauthenticated","message":"Sign in to continue."},"provider":"access"}`, and 401 with the text "Sign in with Cloudflare Access to use the admin pages." (the Worker's tests send these requests with a made-up Access configuration; not seen on Cloudflare). A 503 instead means a setting is missing or malformed (the Worker's logs say which: see [Troubleshooting](deploying.md#troubleshooting)).
    - In a browser, open `https://<custom-domain>/admin` (no trailing slash) in a private window: you should reach Access's sign-in. Sign in with an allowed email and the admin list should load. A non-allowed email should be refused by Access. Also open `https://<custom-domain>/` and a booking link `/e/<slug>`: they must load without any sign-in. "Sign out" in the admin list sends the browser to `/cdn-cgi/access/logout`.
-   - **Unverified: whether Access's `Cf-Access-Jwt-Assertion` header reaches a Worker that serves static assets.** Cloudflare's docs are silent on it. The Worker validates the header itself (see "How the Worker checks the token"), so if the header does not arrive, every admin request after the Access login gets the 401 above and admin cannot be used. Test it as soon as you enable Access: the browser step above is the test. If you are signed in to Access and the admin list still answers 401, the header is not arriving, so switch `ADMIN_AUTH` back to `password` (and see Troubleshooting).
+   - **Unverified: whether Access's `Cf-Access-Jwt-Assertion` header reaches a Worker that serves static assets.** Cloudflare's docs are silent on it. The Worker validates the header itself (see "How the Worker checks the token"), so if the header does not arrive, every admin request after the Access login gets the 401 above and admin cannot be used. Test it as soon as you enable Access: the browser step above is the test. If you are signed in to Access and the admin list still answers 401, the header is not arriving, so remove the `ADMIN_AUTH` line (or set it to `password`) and redeploy (and see Troubleshooting). That works because the site records the Access settings only after a sign-in that reached the Worker, and in this case none did. Once a sign-in has been recorded, those two steps no longer leave Access: see "Leaving Access".
+
+### After the first Access sign-in: pinning
+
+With `ADMIN_AUTH=access` in the settings, the first time an admin signs in through Access, `GET /api/admin/session` copies the team domain, the AUD and the request's hostname into the `auth_settings` row (`mode = 'access'`, `changed_by = 'import'`), unless the database already holds exactly those values. This is called pinning. From then on a lost `ADMIN_AUTH` line changes nothing: with the variable unset, the stored mode keeps the site on Access.
+
+**A site that has never had an admin sign in through Access is not pinned,** and is not protected against losing the line. Without the line it falls back to the password sign-in, and an admin secret made before the switch, still in the database, is accepted again. So when you move an existing site that has `"vars": { "ADMIN_AUTH": "access" }` in its own `wrangler.jsonc`, do these in this order:
+
+1. Deploy the new code with the `ADMIN_AUTH` line still in your own `wrangler.jsonc`. The template no longer has any `vars`, so an update shows a conflict on that line: keep yours.
+2. Sign in once through Cloudflare Access. This first sign-in records the Access settings in the database (the mode is "pinned").
+3. Check that `/api/admin/session` shows provider `access`.
+4. Only then remove the `ADMIN_AUTH` line.
+
+Removing the line before that first sign-in drops the site back to password mode, with the old admin secret valid again.
+
+### Leaving Access
+
+Because an unset or `password` `ADMIN_AUTH` leaves the stored mode in charge, setting it back to `password` no longer leaves Access once the site is pinned. The ways back:
+
+- `/recover`, with the recovery code. It sets the stored mode to `password` (`changed_by = 'recovery'`) and makes a new admin secret and recovery code. **If your settings still have `ADMIN_AUTH=access`, remove that line first,** because it wins over the stored mode and the next Access sign-in would put the Access mode back. `/recover` says so when it sees the setting. It answers 404 if the site has no recovery code, or if `ADMIN_PASSWORD_HASH` or `ADMIN_SESSION_SECRET` is set (delete those secrets first).
+- The database statement, in the D1 console (remove any `ADMIN_AUTH=access` line first, for the same reason):
+
+  ```sql
+  UPDATE auth_settings SET mode = 'password', changed_by = 'owner' WHERE id = 1;
+  ```
+
+  This returns to the password sign-in with whatever admin secret is stored. If there is none, or it is lost, follow with the steps in [handover.md](handover.md#if-the-admin-secret-is-lost).
 
 ### What `workers.dev` does under Access
 
@@ -235,7 +315,7 @@ The one exemption is `POST /api/admin/login` with the password provider: it gets
 
 The pages (`guardAdminPage` in the same file) are guarded too: signed out, the password provider redirects to `/admin/login` (only `/admin/login`, `/admin/login.html` and `/admin/login.js` are served without signing in), the access provider answers 401 text, and an unconfigured site answers 503, or redirects to `/setup` when the only thing missing is the admin secret and setup is open. The pages hold no data and the API is protected on its own, so this is defence in depth.
 
-`run_worker_first` in `wrangler.jsonc` makes the Worker see `/`, `/e/*`, `/api/*`, `/admin`, `/admin/*` and `/setup` before the static files, so none of these can be served around the guards. `src/test/wrangler-config.test.ts` pins that list. Every other static file (scripts, styles, icons) is served straight from `public/`.
+`run_worker_first` in `wrangler.jsonc` makes the Worker see `/`, `/e/*`, `/api/*`, `/admin`, `/admin/*`, `/setup` and `/recover` before the static files, so none of these can be served around the guards. `src/test/wrangler-config.test.ts` pins that list. Every other static file (scripts, styles, icons) is served straight from `public/`.
 
 ## Checking the security headers after deployment
 
@@ -257,6 +337,9 @@ The Worker also refuses plain `http://` before it does anything else, on every h
 - Whether a login fits in the free plan's 10 ms of CPU is unverified on real Workers; only local numbers exist (see "What a login costs").
 - Per-client login limiting doesn't stop a distributed attack, and clients sharing an address share the lockout (see "Rate limiting").
 - Logout can't revoke a password session before it expires (see above).
+- **Recovery attempts are limited per visitor, and not across all visitors, on purpose.** `/recover` allows 5 attempts per 15 minutes for each address (an IPv6 address counts as its /64). So anyone on the same network address as the owner can keep that address blocked, and the owner can try from another network. A cap across everyone would let anyone block the owner from the one route meant for the worst day. Guessing a 256-bit recovery code is not feasible. The attempts are counted in the database, so someone rotating addresses can cause database writes without limit, as with the sign-in page.
+- **The claim race.** Until the owner presses "Create my admin secret", anyone who finds the site's address within the 30 minutes can claim it first. Setting `SETUP_CODE` before the first visit turns the window off.
+- **The recovery code is a second secret.** Whoever holds it can make a new admin secret, with or without the window, so keep it as carefully as the admin secret.
 - No second factor with the password provider. Access can provide one.
 
 ## Cloudflare claims

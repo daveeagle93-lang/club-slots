@@ -18,7 +18,7 @@ You need Node 24 (the tests and typecheck pass here on v24.20.0).
 
 ```sh
 npm install
-cp .dev.vars.example .dev.vars   # then put a SETUP_CODE of 12+ characters in it
+cp .dev.vars.example .dev.vars   # every line is commented out: nothing is needed to start
 npm test                         # unit and integration tests
 npm run typecheck
 npm run db:migrate:local         # local D1 under .wrangler/state
@@ -26,7 +26,16 @@ npm run seed                     # adds a test event and prints its URL
 npm run dev                      # Wrangler prints the local address
 ```
 
-Open `/setup` on the local address to make a local admin secret, as in [First run: `/setup`](../README.md#first-run-setup).
+Open the local address to make a local admin secret and recovery code, as in [First run: `/setup`](../README.md#first-run-setup). The local database gets its own 30-minute first-run window when `npm run db:migrate:local` first creates it, and while the window is open `/` and the admin pages send you to `/setup`. After that, `/setup` needs a code: set `SETUP_CODE` (12 or more characters) in `.dev.vars` and restart `npm run dev`. Once you have signed in, `/setup` is closed; `/recover` with the recovery code makes a new secret.
+
+To reset the local sign-in, delete the `admin_credentials` row and reopen the window in the local database (**unverified**: I have not run these local commands):
+
+```sh
+npx wrangler d1 execute DB --local --command "DELETE FROM admin_credentials"
+npx wrangler d1 execute DB --local --command "UPDATE auth_settings SET setup_opened_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), claim_token_hash = NULL, recovery_hash = NULL, recovery_created_at = NULL"
+```
+
+Or delete the `.wrangler/state` folder and run `npm run db:migrate:local` again, which also deletes the local bookings. This is the same reset as in [handover.md](handover.md#if-the-admin-secret-is-lost), pointed at the local database.
 
 If `/setup` answers 404 locally, see [Local development: `/setup` 404s](deploying.md#local-development-setup-404s).
 
