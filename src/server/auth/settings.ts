@@ -84,3 +84,14 @@ export async function pinAccess(
   ).bind(v.teamDomain, v.aud, v.hostname, nowIso, v.teamDomain, v.aud, v.hostname).run();
   return result.meta.changes > 0;
 }
+
+/** The mode stored in D1, or null when there is no row, the value is not exactly a known mode, or the read fails (logged by message only). */
+export async function readStoredMode(db: D1Database): Promise<"access" | "password" | null> {
+  try {
+    const row = await db.prepare("SELECT mode FROM auth_settings WHERE id = 1").first<{ mode: string }>();
+    return row?.mode === "access" || row?.mode === "password" ? row.mode : null;
+  } catch (e) {
+    console.error(`Stored mode read failed: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
+  }
+}

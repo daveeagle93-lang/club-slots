@@ -24,7 +24,7 @@ describe("GET /api/admin/session", () => {
     const res = await app(accessEnv(t.env.DB), "/api/admin/session", { headers: { "Cf-Access-Jwt-Assertion": jwt } });
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(await res.json()).toEqual({ identity: "admin@club.example", provider: "access", csrfToken: await csrfToken(jwt) });
+    expect(await res.json()).toEqual({ identity: "admin@club.example", provider: "access", storedMode: "access", csrfToken: await csrfToken(jwt) });
     // A refreshed JWT is a new binding, so the token changes: clients re-fetch on csrf_failed.
     const refreshed = await accessJwt(key, accessClaims({ exp: NOW / 1000 + 900 }));
     const again = (await (await app(accessEnv(t.env.DB), "/api/admin/session", { headers: { "Cf-Access-Jwt-Assertion": refreshed } })).json()) as { csrfToken: string };
@@ -36,6 +36,13 @@ describe("GET /api/admin/session", () => {
     const res = await app(await passwordEnv(t.env.DB), "/api/admin/session");
     expect(res.status).toBe(401);
     expect(await res.json()).toMatchObject({ error: { code: "unauthenticated" }, provider: "password" });
+  });
+
+  it("with no session: the 401 does not say the stored mode", async () => {
+    const app = adminApp({ now: () => NOW });
+    const res = await app(await passwordEnv(t.env.DB), "/api/admin/session");
+    expect(res.status).toBe(401);
+    expect(await res.json()).not.toHaveProperty("storedMode");
   });
 });
 
@@ -75,6 +82,56 @@ describe("GET /api/admin/session: pinning env Access into auth_settings", () => 
     expect(await settings()).toMatchObject({ mode: "password", access_team_domain: null, changed_by: null });
   });
 
+  it("reports the stored mode for a password sign-in", async () => {
+    const app = adminApp({ now: () => NOW });
+    const env = await passwordEnv(t.env.DB);
+    const login = await app(env, "/api/admin/login", {
+      method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", "CF-Connecting-IP": "198.18.0.1" },
+      body: JSON.stringify({ password: TEST_PASSWORD }),
+    });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const res = await app(env, "/api/admin/session", { headers: { Cookie: cookie } });
+    expect(await res.json()).toMatchObject({ provider: "password", storedMode: "password" });
+  });
+
+  it("reports null when the auth_settings row is gone", async () => {
+    const key = await newAccessKey("k");
+    const app = adminApp({ now: () => NOW, fetch: jwksFetch(() => [key]) as unknown as typeof fetch });
+    const jwt = await accessJwt(key);
+    await t.env.DB.prepare("DELETE FROM auth_settings").run();
+    try {
+      const res = await app(accessEnv(t.env.DB), "/api/admin/session", { headers: { "Cf-Access-Jwt-Assertion": jwt } });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ provider: "access", storedMode: null });
+    } finally {
+      await t.env.DB.prepare("INSERT INTO auth_settings (id, setup_opened_at) VALUES (1, '2026-10-22T10:00:00.000Z')").run();
+    }
+  });
+
+  it("still answers with a null stored mode when reading it fails, and logs the message only", async () => {
+    const key = await newAccessKey("k");
+    const app = adminApp({ now: () => NOW, fetch: jwksFetch(() => [key]) as unknown as typeof fetch });
+    const jwt = await accessJwt(key);
+    const db = new Proxy(t.env.DB, {
+      get(target, prop) {
+        if (prop !== "prepare") return Reflect.get(target, prop).bind(target);
+        return (sql: string) => {
+          if (sql.startsWith("SELECT mode FROM auth_settings")) throw new Error("read blocked");
+          return target.prepare(sql);
+        };
+      },
+    });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await app(accessEnv(db), "/api/admin/session", { headers: { "Cf-Access-Jwt-Assertion": jwt } });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ identity: "admin@club.example", provider: "access", storedMode: null });
+      expect(logged.mock.calls).toEqual([["Stored mode read failed: read blocked"]]);
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it("still answers when the pin fails, and logs the message only", async () => {
     const key = await newAccessKey("k");
     const app = adminApp({ now: () => NOW, fetch: jwksFetch(() => [key]) as unknown as typeof fetch });
@@ -85,7 +142,8 @@ describe("GET /api/admin/session: pinning env Access into auth_settings", () => 
     try {
       const res = await app(accessEnv(t.env.DB), "/api/admin/session", { headers: { "Cf-Access-Jwt-Assertion": jwt } });
       expect(res.status).toBe(200);
-      expect(await res.json()).toMatchObject({ identity: "admin@club.example", provider: "access" });
+      // The provider follows the env line, the stored mode is what D1 holds: they differ here.
+      expect(await res.json()).toMatchObject({ identity: "admin@club.example", provider: "access", storedMode: "password" });
       expect(logged).toHaveBeenCalledTimes(1);
       expect(JSON.stringify(logged.mock.calls)).not.toContain(jwt);
     } finally {

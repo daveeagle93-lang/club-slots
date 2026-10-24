@@ -249,14 +249,14 @@ v1.1 (migrations up to `0018`) asked for a `SETUP_CODE` on the Deploy form. This
 
 1. Deploy the new code with `"vars": { "ADMIN_AUTH": "access" }` still in your own `wrangler.jsonc` (with your `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`).
 2. Sign in once through Cloudflare Access. This first sign-in records the Access settings in the database (the mode is "pinned").
-3. Check that `/api/admin/session` shows provider `access`. This only shows that the site is on Access: it says `access` even if saving the pin failed.
-4. Open an admin page (the admin pages call the session endpoint, and that call is what saves the pin). Then, in the D1 console, or from a terminal in the project folder, run the decisive check and expect `access` and `import`:
+3. Open `/api/admin/session` in the browser, still signed in through Access, and expect `"provider":"access"` and `"storedMode":"access"`. `provider` only shows that the site is on Access (it says `access` even if saving the pin failed); `storedMode` is the mode the database holds. If `provider` is `access` but `storedMode` is `password`, the pin did not take: do not remove `ADMIN_AUTH`. A `storedMode` of `null` means the database could not be read or has no settings row: check again, and use the SQL below.
+4. As a fallback, or if you prefer the database itself, in the D1 console, or from a terminal in the project folder, run this check and expect `access` and `import`:
 
    ```sh
    npx wrangler d1 execute DB --remote --env="" --command "SELECT mode, changed_by FROM auth_settings WHERE id = 1;"
    ```
 
-5. Only when that shows `access` / `import`, remove the `ADMIN_AUTH` line.
+5. Only when `storedMode` is `access` (or the SQL shows `access` / `import`), remove the `ADMIN_AUTH` line. `storedMode: "access"` shows the mode is saved, not that the saved team domain and AUD match the ones in your config. If you changed the team domain or AUD since you first signed in through Access (for example you recreated the Access application), also check `access_team_domain` and `access_aud` with `SELECT access_team_domain, access_aud FROM auth_settings WHERE id = 1;` before removing `ADMIN_AUTH`, otherwise the site falls back to the old saved values and you are locked out.
 
 Removing the line **before** that first sign-in drops the site back to password mode, with the old admin secret valid again. A site that has never had an admin sign in through Access is not protected against losing the line. Once pinned, the site stays on Access without the line, and editing the line back to `password` does not leave Access either; the ways out are in [handover.md](handover.md).
 

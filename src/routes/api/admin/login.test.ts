@@ -49,7 +49,7 @@ describe("POST /api/admin/login", () => {
     expect(body.identity).toBe("admin");
     // The cookie opens the session endpoint, which hands out the same token.
     const session = await app(env, "/api/admin/session", { headers: { Cookie: cookie.split(";")[0] } });
-    expect(await session.json()).toEqual({ identity: "admin", provider: "password", csrfToken: body.csrfToken });
+    expect(await session.json()).toEqual({ identity: "admin", provider: "password", storedMode: "password", csrfToken: body.csrfToken });
     expect(body.csrfToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(body.csrfToken).toBe(await csrfToken(JSON.parse(atob(cookie.split(";")[0].split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sid));
   });

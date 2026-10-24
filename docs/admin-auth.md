@@ -244,15 +244,15 @@ With `ADMIN_AUTH=access` in the settings, the first time an admin signs in throu
 
 1. Deploy the new code with the `ADMIN_AUTH` line still in your own `wrangler.jsonc`. The template no longer sets `ADMIN_AUTH`. If you changed that `vars` line (for Access), merging the template shows a conflict on it: keep yours.
 2. Sign in once through Cloudflare Access. This first sign-in records the Access settings in the database (the mode is "pinned").
-3. Check that `/api/admin/session` shows provider `access`. This only shows that the site is on Access: it says `access` even if saving the pin failed (the route logs a failed pin and carries on).
-4. Open an admin page (the admin pages call the session endpoint, and that call is what saves the pin). Then, in the D1 console, run the decisive check and expect `access` and `import`:
+3. Open `/api/admin/session` in the browser, still signed in through Access, and expect `"provider":"access"` and `"storedMode":"access"`. `provider` only shows that the site is on Access: it says `access` even if saving the pin failed (the route logs a failed pin and carries on). `storedMode` is the mode the database holds, read after the pin is attempted. If `provider` is `access` but `storedMode` is `password`, the pin did not take: do not remove `ADMIN_AUTH`. A `storedMode` of `null` means the database has no settings row or could not be read: do not remove `ADMIN_AUTH`, check again, and use the SQL below.
+4. As a fallback, or if you prefer the database itself, run this in the D1 console and expect `access` and `import`:
 
    ```sql
    SELECT mode, changed_by FROM auth_settings WHERE id = 1;
    ```
 
    From a terminal in the project folder: `npx wrangler d1 execute DB --remote --env="" --command "SELECT mode, changed_by FROM auth_settings WHERE id = 1;"`.
-5. Only when that shows `access` / `import`, remove the `ADMIN_AUTH` line.
+5. Only when `storedMode` is `access` (or the SQL shows `access` / `import`), remove the `ADMIN_AUTH` line. `storedMode: "access"` shows the mode is saved, not that the saved team domain and AUD match the ones in your config. If you changed the team domain or AUD since you first signed in through Access (for example you recreated the Access application), also check `access_team_domain` and `access_aud` with `SELECT access_team_domain, access_aud FROM auth_settings WHERE id = 1;` before removing `ADMIN_AUTH`, otherwise the site falls back to the old saved values and you are locked out.
 
 Removing the line before that first sign-in drops the site back to password mode, with the old admin secret valid again.
 
@@ -320,7 +320,7 @@ The one exemption is `POST /api/admin/login` with the password provider: it gets
 3. `X-CSRF-Token` must equal the session's token, compared in constant time. The token is `base64url(SHA-256("slot-booker-csrf-v1:" + csrfBinding))`, where the binding is a secret the page's JavaScript never sees: the session id in the HttpOnly cookie (password) or the Access JWT in the header (access). No separate CSRF secret is needed.
 4. `Content-Type` must be `application/json`, which a cross-site form can't send.
 
-`GET /api/admin/session` returns `{ identity, provider, csrfToken }`. A client fetches it once, sends the token as `X-CSRF-Token` on writes, and **re-fetches `/session` and retries once on a 403 `csrf_failed`**: under Access the JWT is refreshed periodically, which changes the token.
+`GET /api/admin/session` returns `{ identity, provider, storedMode, csrfToken }`, where `storedMode` is the sign-in mode held in D1 (`access`, `password`, or `null` if it cannot be read). Only the signed-in answer carries it: the 401 does not. A client fetches it once, sends the token as `X-CSRF-Token` on writes, and **re-fetches `/session` and retries once on a 403 `csrf_failed`**: under Access the JWT is refreshed periodically, which changes the token.
 
 The pages (`guardAdminPage` in the same file) are guarded too: signed out, the password provider redirects to `/admin/login` (only `/admin/login`, `/admin/login.html` and `/admin/login.js` are served without signing in), the access provider answers 401 text, and an unconfigured site answers 503, or redirects to `/setup` when the only thing missing is the admin secret and setup is open. The pages hold no data and the API is protected on its own, so this is defence in depth.
 

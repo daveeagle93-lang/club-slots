@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestEnv, interceptBatches, type TestEnv } from "../../test/db";
-import { CLAIM_WINDOW_MS, envAuthSetting, loadAuthState, NO_SETTINGS, pinAccess, windowOpen } from "./settings";
+import { CLAIM_WINDOW_MS, envAuthSetting, loadAuthState, NO_SETTINGS, pinAccess, readStoredMode, windowOpen } from "./settings";
 
 let t: TestEnv;
 beforeAll(async () => { t = await createTestEnv(); });
@@ -79,6 +79,31 @@ describe("pinAccess", () => {
   it("changes nothing when the row is gone", async () => {
     await t.env.DB.prepare("DELETE FROM auth_settings").run();
     expect(await pinAccess(t.env.DB, v, "2026-10-22T11:00:00.000Z")).toBe(false);
+  });
+});
+
+describe("readStoredMode", () => {
+  it("reads the stored mode", async () => {
+    expect(await readStoredMode(t.env.DB)).toBe("password");
+    await t.env.DB.prepare("UPDATE auth_settings SET mode = 'access', access_team_domain = 'club.cloudflareaccess.com', access_aud = 'aud-1', access_hostname = 'club.example' WHERE id = 1").run();
+    expect(await readStoredMode(t.env.DB)).toBe("access");
+  });
+
+  it("is null when the row is gone", async () => {
+    await t.env.DB.prepare("DELETE FROM auth_settings").run();
+    expect(await readStoredMode(t.env.DB)).toBeNull();
+  });
+
+  it("is null when the read fails, and logs the message only", async () => {
+    const failing = { prepare: () => { throw new Error("read blocked"); } } as unknown as D1Database;
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await readStoredMode(failing)).toBeNull();
+      expect(logged).toHaveBeenCalledTimes(1);
+      expect(logged.mock.calls[0]).toEqual(["Stored mode read failed: read blocked"]);
+    } finally {
+      logged.mockRestore();
+    }
   });
 });
 
