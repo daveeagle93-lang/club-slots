@@ -16,8 +16,9 @@
   <body>
     <main id="app" class="login" data-autostart>
       <h1>Set up admin sign-in</h1>
-      <form id="setup-form" method="post" novalidate>
-        <p>Enter the setup code you chose when you deployed this site. You will then be shown your admin secret.</p>
+      <p id="page-error" class="form-error" role="alert"></p>
+      <form id="setup-form" method="post" novalidate hidden>
+        <p>Enter the setup code you chose when you deployed this site. You will then be shown your admin secret and a recovery code.</p>
         <div class="field">
           <label for="code">Setup code</label>
           <input id="code" name="code" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off" maxlength="256" required />
@@ -25,14 +26,28 @@
         <p id="setup-error" class="form-error" role="alert"></p>
         <button type="submit" class="button primary">Continue</button>
       </form>
+      <section id="claim-step" class="message" hidden>
+        <h2 id="claim-heading">Create your admin secret</h2>
+        <p id="claim-text">This site has no admin yet. Press the button to make your admin secret and a recovery code. Both are shown once. Save both in a password manager before you leave this page.</p>
+        <p id="claim-error" class="form-error" role="alert"></p>
+        <button type="button" id="claim" class="button primary">Create my admin secret</button>
+      </section>
+      <section id="taken-step" class="message" hidden>
+        <p>This site has already been set up.</p>
+        <a class="button primary" href="/admin/login">Sign in</a>
+      </section>
       <section id="secret-step" class="message" hidden>
-        <h2 id="secret-heading" tabindex="-1">Your admin secret</h2>
-        <p><strong>This is your admin secret. Save it in your password manager now: it is shown only this once.</strong></p>
+        <h2 id="secret-heading" tabindex="-1">Your admin secret and recovery code</h2>
+        <p><strong>Both are shown only this once. Save them in your password manager now. If it lets you, keep them as two separate entries.</strong></p>
+        <p>Admin secret: you sign in with this.</p>
         <p id="secret" class="secret"></p>
-        <button type="button" id="copy" class="button">Copy</button>
+        <button type="button" id="copy" class="button">Copy admin secret</button>
+        <p>Recovery code: if you lose the admin secret, this lets you make a new one.</p>
+        <p id="recovery" class="secret"></p>
+        <button type="button" id="copy-recovery" class="button">Copy recovery code</button>
         <p id="copy-status" class="copy-status" role="status"></p>
-        <p>If you run setup again before you first sign in, this secret is replaced.</p>
-        <label class="check" for="saved"><input id="saved" type="checkbox" />I've saved it</label>
+        <p>If you run setup again before you first sign in, both are replaced.</p>
+        <label class="check" for="saved"><input id="saved" type="checkbox" />I've saved both</label>
         <button type="button" id="sign-in" class="button primary" aria-describedby="sign-in-hint" disabled>Go to sign in</button>
         <p id="sign-in-hint" class="hint">Tick the box first.</p>
       </section>

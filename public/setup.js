@@ -1,7 +1,9 @@
 import { brandPage, loadSettings } from "./branding.js";
+import { showSaveScreen } from "./save-screen.js";
 
 const SIGN_IN = "/admin/login";
 const GENERIC_ERROR = "Something went wrong. Please try again.";
+const CLOSED = "Setup has already been completed.";
 
 function rateLimitMessage(retryAfter) {
   const seconds = Number(retryAfter);
@@ -25,24 +27,37 @@ export function trimAdminSecret(input) {
   return input.slice(start, end);
 }
 
+/** The closed-setup text, with a way on to sign-in. */
+function showClosed(document, target) {
+  const link = document.createElement("a");
+  link.href = SIGN_IN;
+  link.textContent = "Sign in instead.";
+  target.textContent = CLOSED;
+  target.append(" ", link);
+}
+
 /**
- * Wires the first-run page. Step 1 asks for the setup code; step 2 shows the admin secret the server made, once. The
- * secret is only ever put into the page when the response arrives: not in the address, in storage, or anywhere else.
+ * Wires the first-run page. It first asks /api/setup which step to show: the setup code form, the claim button (also
+ * offered again to the browser that claimed), or a note that the site is already set up. Either way in, the admin secret
+ * and the recovery code the server made are then shown once, by the shared save screen.
  */
-export function init({ document, fetch, navigator, navigate = (url) => document.location.assign(url) }) {
+export async function init({ document, fetch, navigator, navigate = (url) => document.location.assign(url) }) {
   const form = document.getElementById("setup-form");
   const field = document.getElementById("code");
   const error = document.getElementById("setup-error");
   const button = form.querySelector("button");
-  const step2 = document.getElementById("secret-step");
-  const heading = document.getElementById("secret-heading");
-  const secretBlock = document.getElementById("secret");
-  const copy = document.getElementById("copy");
-  const copyStatus = document.getElementById("copy-status");
-  const saved = document.getElementById("saved");
-  const signIn = document.getElementById("sign-in");
-  const signInHint = document.getElementById("sign-in-hint");
+  const pageError = document.getElementById("page-error");
+  const claimStep = document.getElementById("claim-step");
+  const claimHeading = document.getElementById("claim-heading");
+  const claimText = document.getElementById("claim-text");
+  const claimError = document.getElementById("claim-error");
+  const claim = document.getElementById("claim");
+  const takenStep = document.getElementById("taken-step");
   let submitting = false;
+  let claiming = false;
+
+  const showSecrets = (body) => showSaveScreen({ document, navigator, navigate }, body);
+  const hasBoth = (body) => typeof body?.secret === "string" && typeof body?.recoveryCode === "string";
 
   async function submit(event) {
     event.preventDefault();
@@ -66,47 +81,80 @@ export function init({ document, fetch, navigator, navigate = (url) => document.
         body: JSON.stringify({ code }),
       });
       const body = await res.json().catch(() => null);
-      if (res.ok && typeof body?.secret === "string") {
+      if (res.ok && hasBoth(body)) {
         field.value = "";
         form.hidden = true;
-        secretBlock.textContent = body.secret;
-        step2.hidden = false;
-        heading.focus(); // so a screen reader reads the "shown only this once" warning before the secret
+        showSecrets(body);
         return;
       }
       if (res.status === 429) message = rateLimitMessage(res.headers.get("Retry-After"));
-      else if (res.status === 404) { message = "Setup has already been completed."; closed = true; }
+      else if (res.status === 404) { message = CLOSED; closed = true; }
       else if (typeof body?.error?.message === "string") message = body.error.message;
     } catch { /* offline or blocked: the generic message */ }
     if (message !== GENERIC_ERROR) field.value = "";
-    error.textContent = message;
-    if (closed) {
-      const link = document.createElement("a");
-      link.href = SIGN_IN;
-      link.textContent = "Sign in instead.";
-      error.append(" ", link);
-    }
+    if (closed) showClosed(document, error);
+    else error.textContent = message;
     submitting = false;
     button.disabled = false;
     field.focus();
   }
   form.addEventListener("submit", submit);
 
-  copy.addEventListener("click", async () => {
+  // Nothing is made by loading the page: only this press asks the server to (design 3.3).
+  async function makeSecrets() {
+    if (claiming) return;
+    claiming = true;
+    claim.disabled = true;
+    claimError.textContent = "";
     try {
-      await navigator.clipboard.writeText(secretBlock.textContent);
-      copyStatus.textContent = "Copied.";
+      const res = await fetch("/api/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: "{}",
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && hasBoth(body)) {
+        claimStep.hidden = true;
+        showSecrets(body);
+        return;
+      }
+      if (res.status === 409) {
+        claimStep.hidden = true;
+        takenStep.hidden = false;
+        return;
+      }
+      if (res.status === 404) showClosed(document, claimError);
+      else claimError.textContent = typeof body?.error?.message === "string" ? body.error.message : GENERIC_ERROR;
     } catch {
-      copyStatus.textContent = "Couldn't copy automatically. Select the secret above and copy it yourself.";
+      claimError.textContent = GENERIC_ERROR;
     }
-  });
+    claiming = false;
+    claim.disabled = false;
+  }
+  claim.addEventListener("click", makeSecrets);
 
-  // Disabled until the box is ticked, so the secret is not left behind by an early click.
-  saved.addEventListener("change", () => {
-    signIn.disabled = !saved.checked;
-    signInHint.hidden = saved.checked;
-  });
-  signIn.addEventListener("click", () => navigate(SIGN_IN));
+  let state = null;
+  try {
+    const res = await fetch("/api/setup", { credentials: "same-origin", cache: "no-store" });
+    const body = await res.json().catch(() => null);
+    if (res.ok && typeof body?.state === "string") state = body.state;
+    else if (res.status === 404) showClosed(document, pageError);
+    else pageError.textContent = typeof body?.error?.message === "string" ? body.error.message : GENERIC_ERROR;
+  } catch {
+    pageError.textContent = GENERIC_ERROR;
+  }
+  if (state === "code") form.hidden = false;
+  else if (state === "claim" || state === "reissue") {
+    if (state === "reissue") {
+      claimHeading.textContent = "Get a new admin secret";
+      claimText.textContent = "You made an admin secret here but have not signed in yet. Press the button to replace it with a new admin secret and a new recovery code. Both are shown once. Save both in a password manager before you leave this page.";
+      claim.textContent = "Show me a new secret";
+    }
+    claimStep.hidden = false;
+  } else if (state === "taken") takenStep.hidden = false;
+  else if (state !== null) pageError.textContent = GENERIC_ERROR;
 }
 
 // Browser entry only: the page opts in with data-autostart, so importing this module (tests) does nothing.

@@ -8,21 +8,31 @@ import { init, trimAdminSecret } from "./setup.js";
 const reply = (status: number, body: unknown = {}, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
 const SECRET = "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw";
+const RECOVERY = "Q7mT2vLx9RkWc4HnYp8aBd3sFgJu6ZeNiOo1VtXyM0w";
+const issued = () => reply(200, { secret: SECRET, recoveryCode: RECOVERY });
 
 type Call = { url: string; init?: RequestInit };
 type Clipboard = { writeText: (text: string) => Promise<void> };
 
-/** Loads the real setup.html body, then starts the page with a scripted fetch. */
-async function start(handler: (call: Call) => Response | Promise<Response> = () => reply(200, { secret: SECRET }), clipboard?: Clipboard, navigate: (url: string) => void = () => {}) {
+/**
+ * Loads the real setup.html body, then starts the page with a scripted fetch. `handler` answers the POSTs and `state`
+ * answers the GET /api/setup the page makes first; `calls` holds the POSTs and `gets` the GETs.
+ */
+async function start(handler: (call: Call) => Response | Promise<Response> = issued, clipboard?: Clipboard, navigate: (url: string) => void = () => {}, state: () => Response | Promise<Response> = () => reply(200, { state: "code" })) {
   const html = readFileSync("public/setup.html", "utf8");
   document.body.innerHTML = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>")).replace(/<script[\s\S]*?<\/script>/g, "");
   const calls: Call[] = [];
+  const gets: Call[] = [];
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
-    calls.push({ url, init });
-    return handler({ url, init });
+    if (init?.method === "POST") {
+      calls.push({ url, init });
+      return handler({ url, init });
+    }
+    gets.push({ url, init });
+    return state();
   });
-  init({ document, fetch: fetch as unknown as typeof globalThis.fetch, navigator: { clipboard }, navigate });
-  return { calls };
+  await init({ document, fetch: fetch as unknown as typeof globalThis.fetch, navigator: { clipboard }, navigate });
+  return { calls, gets };
 }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -31,6 +41,8 @@ const button = () => $("#setup-form button") as HTMLButtonElement;
 const error = () => $("#setup-error");
 const saved = () => $("#saved") as HTMLInputElement;
 const signIn = () => $("#sign-in") as HTMLButtonElement;
+const claim = () => $("#claim") as HTMLButtonElement;
+const visible = () => ["#setup-form", "#claim-step", "#taken-step", "#secret-step"].filter((sel) => !$(sel).hidden);
 const hint = () => $("#sign-in-hint");
 const submit = async (value: string) => {
   code().value = value;
@@ -61,7 +73,7 @@ describe("setup page markup", () => {
     expect(html).toMatch(/<input[^>]*id="code"[^>]*\brequired\b/);
   });
   it("has the secret step's heading focusable by script, and a real disabled button (not a link without an address) for going on to sign in", () => {
-    expect(html).toMatch(/<h2[^>]*id="secret-heading"[^>]*tabindex="-1"[^>]*>Your admin secret<\/h2>/);
+    expect(html).toMatch(/<h2[^>]*id="secret-heading"[^>]*tabindex="-1"[^>]*>Your admin secret and recovery code<\/h2>/);
     expect(html).toMatch(/<button[^>]*type="button"[^>]*id="sign-in"[^>]*\bdisabled\b[^>]*>Go to sign in<\/button>|<button[^>]*id="sign-in"[^>]*type="button"[^>]*\bdisabled\b[^>]*>Go to sign in<\/button>/);
     expect(html).toContain('aria-describedby="sign-in-hint"');
     expect(html).toMatch(/id="sign-in-hint"[^>]*>Tick the box first\.<\/p>/);
@@ -72,29 +84,162 @@ describe("setup page markup", () => {
     expect(html).toContain('<link rel="stylesheet" href="/api/theme.css" />');
     expect(html).toContain('href="/api/icon/32"');
   });
-  it("has one code field with autocomplete off, its label, an alert region, a Continue button, and a hidden secret step", () => {
-    expect(html.match(/<input/g)).toHaveLength(2); // the code, and the "I've saved it" checkbox
+  it("has one code field with autocomplete off, its label, an alert region, a Continue button, and every step hidden until the page knows which to show", () => {
+    expect(html.match(/<input/g)).toHaveLength(2); // the code, and the "I've saved both" checkbox
     expect(html).toMatch(/<input[^>]*id="code"[^>]*autocomplete="off"|<input[^>]*autocomplete="off"[^>]*id="code"/);
     expect(html).toContain('<label for="code">Setup code</label>');
     expect(html).toContain('role="alert"');
     expect(html).toMatch(/<button[^>]*>Continue<\/button>/);
-    expect(html).toContain("This is your admin secret. Save it in your password manager now: it is shown only this once");
-    expect(html).toContain("If you run setup again before you first sign in, this secret is replaced");
-    expect(html).toMatch(/id="secret-step"[^>]*\bhidden\b/);
+    expect(html).toContain("Both are shown only this once");
+    expect(html).toContain("If you run setup again before you first sign in, both are replaced");
+    for (const id of ["setup-form", "claim-step", "taken-step", "secret-step"]) expect(html).toMatch(new RegExp(`id="${id}"[^>]*\\bhidden\\b`));
     expect(html).not.toContain(SECRET);
+    expect(html).not.toContain(RECOVERY);
   });
 });
 
-describe("setup page, step 1", () => {
-  it("shows the form, with no secret anywhere yet, and makes no request on load", async () => {
-    const { calls } = await start();
+describe("setup page, choosing the step", () => {
+  it("asks /api/setup once, with a plain GET, and shows nothing until it answers", async () => {
+    let answer!: () => void;
+    const pending = new Promise<Response>((resolve) => { answer = () => resolve(reply(200, { state: "code" })); });
+    const html = readFileSync("public/setup.html", "utf8");
+    document.body.innerHTML = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>")).replace(/<script[\s\S]*?<\/script>/g, "");
+    const fetch = vi.fn(async () => pending);
+    const loaded = init({ document, fetch: fetch as unknown as typeof globalThis.fetch, navigator: {} as Navigator, navigate: () => {} });
+    expect(visible()).toEqual([]);
+    answer();
+    await loaded;
+    expect(visible()).toEqual(["#setup-form"]);
+    expect(fetch).toHaveBeenCalledExactlyOnceWith("/api/setup", { credentials: "same-origin", cache: "no-store" });
+  });
+
+  it("state code shows the form only, and posts nothing yet", async () => {
+    const { calls, gets } = await start();
+    expect(gets).toHaveLength(1);
     expect(calls).toEqual([]);
-    expect($("#setup-form").hidden).toBe(false);
-    expect($("#secret-step").hidden).toBe(true);
+    expect(visible()).toEqual(["#setup-form"]);
     expect($("#secret").textContent).toBe("");
     expect(signIn().disabled).toBe(true);
   });
 
+  it("state claim shows the claim step only, with the design's sentence and a button that has not been pressed", async () => {
+    const { calls } = await start(undefined, undefined, undefined, () => reply(200, { state: "claim" }));
+    expect(visible()).toEqual(["#claim-step"]);
+    expect($("#claim-step").textContent).toContain("This site has no admin yet. Press the button to make your admin secret and a recovery code. Both are shown once. Save both in a password manager before you leave this page.");
+    expect(claim().textContent).toBe("Create my admin secret");
+    expect(calls).toEqual([]);
+  });
+
+  it("state reissue shows the claim step, with a button that offers a new secret", async () => {
+    await start(undefined, undefined, undefined, () => reply(200, { state: "reissue" }));
+    expect(visible()).toEqual(["#claim-step"]);
+    expect(claim().textContent).toBe("Show me a new secret");
+    expect($("#claim-step").textContent).toContain("Both are shown once");
+    expect($("#claim-step").textContent).not.toContain("This site has no admin yet");
+  });
+
+  it("state taken shows the sign-in link only", async () => {
+    await start(undefined, undefined, undefined, () => reply(200, { state: "taken" }));
+    expect(visible()).toEqual(["#taken-step"]);
+    expect($("#taken-step").textContent).toContain("This site has already been set up");
+    const link = $("#taken-step a");
+    expect(link.getAttribute("href")).toBe("/admin/login");
+    expect(link.textContent).toBe("Sign in");
+  });
+
+  it("explains a closed setup, shows the server's message when it isn't ready, and a generic one for anything else", async () => {
+    await start(undefined, undefined, undefined, () => reply(404, { error: { code: "not_found", message: "Not found." } }));
+    expect(visible()).toEqual([]);
+    expect($("#page-error").textContent).toBe("Setup has already been completed. Sign in instead.");
+    expect($("#page-error a").getAttribute("href")).toBe("/admin/login");
+    await start(undefined, undefined, undefined, () => reply(503, { error: { code: "setup_not_ready", message: "Setup is closed. The first-run window ended." } }));
+    expect(visible()).toEqual([]);
+    expect($("#page-error").textContent).toBe("Setup is closed. The first-run window ended.");
+    await start(undefined, undefined, undefined, () => { throw new TypeError("Failed to fetch"); });
+    expect($("#page-error").textContent).toBe("Something went wrong. Please try again.");
+    await start(undefined, undefined, undefined, () => new Response("<html>oops</html>", { status: 500 }));
+    expect($("#page-error").textContent).toBe("Something went wrong. Please try again.");
+    await start(undefined, undefined, undefined, () => reply(200, { state: "something-new" }));
+    expect($("#page-error").textContent).toBe("Something went wrong. Please try again.");
+    expect(visible()).toEqual([]);
+  });
+});
+
+describe("setup page, the claim", () => {
+  const claimState = () => reply(200, { state: "claim" });
+  const press = () => claim().click();
+
+  it("posts the JSON {} to /api/setup, same-origin and uncached, and shows both values", async () => {
+    const { calls } = await start(undefined, undefined, undefined, claimState);
+    press();
+    await vi.waitFor(() => expect($("#secret-step").hidden).toBe(false));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/setup");
+    expect(calls[0].init).toMatchObject({ method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" } });
+    expect(JSON.parse(calls[0].init!.body as string)).toEqual({});
+    expect(visible()).toEqual(["#secret-step"]);
+    expect($("#secret").textContent).toBe(SECRET);
+    expect($("#recovery").textContent).toBe(RECOVERY);
+    expect(document.activeElement).toBe($("#secret-heading"));
+  });
+
+  it("works the same from the reissue state", async () => {
+    const { calls } = await start(undefined, undefined, undefined, () => reply(200, { state: "reissue" }));
+    press();
+    await vi.waitFor(() => expect($("#secret-step").hidden).toBe(false));
+    expect(JSON.parse(calls[0].init!.body as string)).toEqual({});
+    expect($("#recovery").textContent).toBe(RECOVERY);
+  });
+
+  it("ignores a second press while the first is in flight", async () => {
+    let release!: () => void;
+    const { calls } = await start(() => new Promise<Response>((resolve) => { release = () => resolve(issued()); }), undefined, undefined, claimState);
+    press();
+    press();
+    expect(calls).toHaveLength(1);
+    expect(claim().disabled).toBe(true);
+    release();
+    await vi.waitFor(() => expect($("#secret-step").hidden).toBe(false));
+    expect(calls).toHaveLength(1);
+  });
+
+  it("shows the taken step on a 409, and the closed text with the sign-in link on a 404", async () => {
+    await start(() => reply(409, { error: { code: "conflict", message: "Already set up." } }), undefined, undefined, claimState);
+    press();
+    await vi.waitFor(() => expect(visible()).toEqual(["#taken-step"]));
+    await start(() => reply(404, { error: { code: "not_found", message: "Not found." } }), undefined, undefined, claimState);
+    press();
+    await vi.waitFor(() => expect($("#claim-error").textContent).toBe("Setup has already been completed. Sign in instead."));
+    expect($("#claim-error a").getAttribute("href")).toBe("/admin/login");
+    expect($("#secret").textContent).toBe("");
+  });
+
+  it("shows the generic error after a network failure or an unusable answer, and lets the user press again", async () => {
+    await start(() => { throw new TypeError("Failed to fetch"); }, undefined, undefined, claimState);
+    press();
+    await vi.waitFor(() => expect($("#claim-error").textContent).toBe("Something went wrong. Please try again."));
+    expect(claim().disabled).toBe(false);
+    expect(visible()).toEqual(["#claim-step"]);
+    await start(() => reply(200, { secret: SECRET }), undefined, undefined, claimState); // no recovery code: never show half a pair
+    press();
+    await vi.waitFor(() => expect($("#claim-error").textContent).toBe("Something went wrong. Please try again."));
+    expect($("#secret").textContent).toBe("");
+    expect(visible()).toEqual(["#claim-step"]);
+  });
+
+  it("clears an earlier error when pressed again", async () => {
+    let fail = true;
+    await start(() => { if (fail) throw new TypeError("Failed to fetch"); return issued(); }, undefined, undefined, claimState);
+    press();
+    await vi.waitFor(() => expect($("#claim-error").textContent).not.toBe(""));
+    fail = false;
+    press();
+    await vi.waitFor(() => expect($("#secret-step").hidden).toBe(false));
+    expect($("#claim-error").textContent).toBe("");
+  });
+});
+
+describe("setup page, the code flow", () => {
   it("asks for a code when the field is empty or only whitespace, without a request", async () => {
     const { calls } = await start();
     await submit("  ​\t ");
@@ -113,7 +258,7 @@ describe("setup page, step 1", () => {
 
   it("sends the code trimmed", async () => {
     const { calls } = await start();
-    code().value = "  club-setup-phrase​ ";
+    code().value = "  club-setup-phrase​ ";
     $("#setup-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(calls).toHaveLength(1));
     expect(JSON.parse(calls[0].init!.body as string)).toEqual({ code: "club-setup-phrase" });
@@ -160,11 +305,15 @@ describe("setup page, step 1", () => {
     await start(() => new Response("<html>oops</html>", { status: 500 }));
     await submit("club-setup-phrase");
     expect(error().textContent).toBe("Something went wrong. Please try again.");
+    await start(() => reply(200, { secret: SECRET })); // no recovery code: never show half a pair
+    await submit("club-setup-phrase");
+    expect(error().textContent).toBe("Something went wrong. Please try again.");
+    expect($("#secret").textContent).toBe("");
   });
 
   it("ignores a second submit while one is in flight", async () => {
     let release!: () => void;
-    const { calls } = await start(() => new Promise<Response>((resolve) => { release = () => resolve(reply(200, { secret: SECRET })); }));
+    const { calls } = await start(() => new Promise<Response>((resolve) => { release = () => resolve(issued()); }));
     code().value = "club-setup-phrase";
     $("#setup-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     $("#setup-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -173,87 +322,62 @@ describe("setup page, step 1", () => {
     release();
     await vi.waitFor(() => expect($("#secret-step").hidden).toBe(false));
   });
-});
 
-describe("setup page, step 2", () => {
-  it("replaces the form with the secret from the response, in a block, and forgets the code", async () => {
+  it("replaces the form with the save screen: both values from the response, and forgets the code", async () => {
     await start();
     await submitOk();
-    expect($("#setup-form").hidden).toBe(true);
-    expect($("#secret-step").hidden).toBe(false);
+    expect(visible()).toEqual(["#secret-step"]);
     expect($("#secret").textContent).toBe(SECRET);
+    expect($("#recovery").textContent).toBe(RECOVERY);
     expect(code().value).toBe("");
-    expect(document.body.textContent).toContain("This is your admin secret. Save it in your password manager now: it is shown only this once");
-    expect(document.body.textContent).toContain("If you run setup again before you first sign in, this secret is replaced");
+    expect(document.activeElement).toBe($("#secret-heading"));
+    expect(document.body.textContent).toContain("Both are shown only this once");
+    expect(document.body.textContent).toContain("If you run setup again before you first sign in, both are replaced");
   });
 
-  it("keeps the secret out of the URL, local and session storage, and cookies", async () => {
+  it("keeps both values out of the URL, local and session storage, and cookies", async () => {
     await start();
     const setItem = vi.spyOn(Storage.prototype, "setItem");
     await submitOk();
     expect(setItem).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
-    expect(globalThis.location.href).not.toContain(SECRET);
-    expect(document.cookie).not.toContain(SECRET);
+    for (const value of [SECRET, RECOVERY]) {
+      expect(globalThis.location.href).not.toContain(value);
+      expect(document.cookie).not.toContain(value);
+    }
     setItem.mockRestore();
   });
+});
 
-  it("enables the sign-in button, and hides the hint, only while 'I've saved it' is ticked", async () => {
-    await start();
-    await submitOk();
-    expect(saved().checked).toBe(false);
-    expect(signIn().disabled).toBe(true);
-    expect(hint().hidden).toBe(false);
-    expect(hint().textContent).toBe("Tick the box first.");
-    saved().checked = true;
-    saved().dispatchEvent(new Event("change", { bubbles: true }));
-    expect(signIn().disabled).toBe(false);
-    expect(hint().hidden).toBe(true);
-    expect(signIn().textContent).toBe("Go to sign in");
-    saved().checked = false;
-    saved().dispatchEvent(new Event("change", { bubbles: true }));
-    expect(signIn().disabled).toBe(true);
-    expect(hint().hidden).toBe(false);
-  });
-
-  it("goes to /admin/login when the enabled button is pressed, and nowhere while it is disabled", async () => {
+describe("setup page, the save screen as the page wires it", () => {
+  it("lets the user go to sign in only after the one 'I've saved both' tick", async () => {
     const navigate = vi.fn();
     await start(undefined, undefined, navigate);
     await submitOk();
+    expect(saved().checked).toBe(false);
+    expect(signIn().disabled).toBe(true);
+    expect(hint().textContent).toBe("Tick the box first.");
     signIn().click();
     expect(navigate).not.toHaveBeenCalled();
     saved().checked = true;
     saved().dispatchEvent(new Event("change", { bubbles: true }));
+    expect(signIn().disabled).toBe(false);
+    expect(hint().hidden).toBe(true);
     signIn().click();
     expect(navigate).toHaveBeenCalledExactlyOnceWith("/admin/login");
   });
 
-  it("moves focus to the secret step's heading, so the 'shown only this once' warning is read first", async () => {
-    await start();
-    await submitOk();
-    expect(document.activeElement).toBe($("#secret-heading"));
-    expect($("#secret-heading").tagName).toBe("H2");
-  });
-
-  it("copies the secret with the clipboard API and says so", async () => {
+  it("copies each value with its own button, from either flow", async () => {
     const writeText = vi.fn(async () => {});
-    await start(undefined, { writeText });
-    await submitOk();
+    await start(undefined, { writeText }, undefined, () => reply(200, { state: "claim" }));
+    claim().click();
+    await vi.waitFor(() => expect($("#secret-step").hidden).toBe(false));
     ($("#copy") as HTMLButtonElement).click();
-    await vi.waitFor(() => expect($("#copy-status").textContent).toBe("Copied."));
-    expect(writeText).toHaveBeenCalledWith(SECRET);
-  });
-
-  it("tells the user to copy it by hand when the clipboard is missing or refuses", async () => {
-    await start(undefined, undefined);
-    await submitOk();
-    ($("#copy") as HTMLButtonElement).click();
-    await vi.waitFor(() => expect($("#copy-status").textContent).toContain("Select the secret above and copy it yourself"));
-    await start(undefined, { writeText: async () => { throw new Error("denied"); } });
-    await submitOk();
-    ($("#copy") as HTMLButtonElement).click();
-    await vi.waitFor(() => expect($("#copy-status").textContent).toContain("Select the secret above and copy it yourself"));
+    ($("#copy-recovery") as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText).toHaveBeenNthCalledWith(1, SECRET);
+    expect(writeText).toHaveBeenNthCalledWith(2, RECOVERY);
   });
 });
 
