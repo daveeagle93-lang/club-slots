@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex" />
+    <title>Recover admin sign-in</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/api/theme.css" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/api/icon/32" />
+    <link rel="apple-touch-icon" href="/api/icon/180" />
+    <link rel="manifest" href="/api/manifest.webmanifest" />
+    <script type="module" src="/recover.js"></script>
+  </head>
+  <body>
+    <main id="app" class="login" data-autostart>
+      <h1>Recover admin sign-in</h1>
+      <form id="recover-form" method="post" novalidate>
+        <p>Enter the recovery code you saved when you set up this site. You will be given a new admin secret and a new recovery code, and the old ones will stop working.</p>
+        <div class="field">
+          <label for="recovery-code">Recovery code</label>
+          <input id="recovery-code" name="code" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off" maxlength="256" required />
+        </div>
+        <p id="recover-error" class="form-error" role="alert"></p>
+        <button type="submit" class="button primary">Continue</button>
+      </form>
+      <section id="secret-step" class="message" hidden>
+        <h2 id="secret-heading" tabindex="-1">Your admin secret and recovery code</h2>
+        <p><strong>Both are shown only this once. Save them in your password manager now. If it lets you, keep them as two separate entries.</strong></p>
+        <p>Admin secret: you sign in with this.</p>
+        <p id="secret" class="secret"></p>
+        <button type="button" id="copy" class="button">Copy admin secret</button>
+        <p>Recovery code: if you lose the admin secret, this lets you make a new one.</p>
+        <p id="recovery" class="secret"></p>
+        <button type="button" id="copy-recovery" class="button">Copy recovery code</button>
+        <p id="copy-status" class="copy-status" role="status"></p>
+        <p>The old admin secret and the old recovery code no longer work.</p>
+        <p id="env-note" hidden>Sign-in is still set to Access in your deployment settings: remove <code>ADMIN_AUTH</code> there too.</p>
+        <label class="check" for="saved"><input id="saved" type="checkbox" />I've saved both</label>
+        <button type="button" id="sign-in" class="button primary" aria-describedby="sign-in-hint" disabled>Go to sign in</button>
+        <p id="sign-in-hint" class="hint">Tick the box first.</p>
+      </section>
+      <noscript><p class="message">This page needs JavaScript to recover the admin sign-in.</p></noscript>
+    </main>
+  </body>
+</html>

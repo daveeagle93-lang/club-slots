@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestEnv, type TestEnv } from "../../test/db";
 import { utf8 } from "./crypto";
-import { clearAttempts, clientKey, countAttempt, PURGE_SQL, rateLimitBucket, setupClientKey } from "./ratelimit";
+import { clearAttempts, clientKey, countAttempt, PURGE_SQL, rateLimitBucket, recoveryClientKey, setupClientKey } from "./ratelimit";
 
 let t: TestEnv;
 beforeAll(async () => { t = await createTestEnv(); });
@@ -225,5 +225,28 @@ describe("setupClientKey", () => {
     const key = await crypto.subtle.importKey("raw", utf8(SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const mac = await crypto.subtle.sign("HMAC", key, utf8("slot-booker-ratelimit-v1:203.0.113.9"));
     expect(await keyOf("203.0.113.9")).toBe([...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join(""));
+  });
+});
+
+describe("recoveryClientKey", () => {
+  const HASH = "hmac-sha256$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+  it("is a hex HMAC-SHA-256 of the bucket under the stored recovery hash, apart from the login and setup keys, and stable per client", async () => {
+    const recovery = await recoveryClientKey("203.0.113.9", HASH);
+    expect(recovery).toMatch(/^[0-9a-f]{64}$/);
+    expect(await recoveryClientKey("203.0.113.9", HASH)).toBe(recovery);
+    expect(recovery).not.toBe(await keyOf("203.0.113.9"));
+    expect(recovery).not.toBe(await setupClientKey("203.0.113.9", HASH));
+    expect(recovery).not.toBe(await clientKey("203.0.113.9", HASH));
+    expect(await recoveryClientKey("203.0.113.9", SECRET)).not.toBe(recovery); // keyed with the hash
+    expect(await recoveryClientKey("203.0.113.9", `${HASH}x`)).not.toBe(recovery);
+    expect(await recoveryClientKey("203.0.113.10", HASH)).not.toBe(recovery);
+    expect(await recoveryClientKey("2001:db8:0:42::1", HASH)).toBe(await recoveryClientKey("2001:db8:0:42:aaaa::2", HASH));
+  });
+
+  it("is HMAC(recovery hash, 'slot-booker-recover-ratelimit-v1:<bucket>')", async () => {
+    const key = await crypto.subtle.importKey("raw", utf8(HASH), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const mac = await crypto.subtle.sign("HMAC", key, utf8("slot-booker-recover-ratelimit-v1:203.0.113.9"));
+    expect(await recoveryClientKey("203.0.113.9", HASH)).toBe([...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join(""));
   });
 });

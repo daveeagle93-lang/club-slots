@@ -16,13 +16,14 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-09-28",
   // run_worker_first: the Worker sees these paths before the static files, so the admin guards, the API and
-  // the event page cannot be bypassed by a static file or served around the Worker, and /setup is served only while
-  // setup is open. Everything else (scripts, styles, icons) is served straight from public/.
+  // the event page cannot be bypassed by a static file or served around the Worker, /setup is served only while
+  // setup is open, and /recover only while a recovery code is stored. Everything else (scripts, styles, icons) is served
+  // straight from public/.
   // src/test/wrangler-config.test.ts pins this list.
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/", "/e/*", "/api/*", "/admin", "/admin/*", "/setup"]
+    "run_worker_first": ["/", "/e/*", "/api/*", "/admin", "/admin/*", "/setup", "/recover"]
   },
   // No per-version preview URLs: they would serve the whole app, admin included, on extra hostnames.
   "preview_urls": false,

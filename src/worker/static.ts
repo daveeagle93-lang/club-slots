@@ -1,3 +1,5 @@
+import { envCredentialsSet } from "../server/auth/password";
+import { loadAuthState } from "../server/auth/settings";
 import { noStore } from "../server/bookings";
 import type { AppEnv, RouteHandler } from "../server/env";
 import { plain } from "../server/http";
@@ -61,6 +63,19 @@ export const serveSetupPage: RouteHandler = async ({ request, env }) => {
   if (state === "closed") return plain(404, "Not found.");
   if (state === "not_ready") return plain(503, setupNotReadyMessage(reason!)); // a not_ready read always has a reason
   const page = await assets(env).fetch(new Request(new URL("/setup", request.url), { method: "GET" }));
+  const out = new Response(page.body, page);
+  for (const [name, value] of Object.entries(noStore)) out.headers.set(name, value);
+  return out;
+};
+
+/**
+ * /recover: the recovery page (public/recover.html), only while a recovery code is stored and the credentials are not set by
+ * environment variables (the same test as POST /api/recover, which has no stored credentials to replace otherwise). Served like
+ * /setup: by its clean URL without the visitor's conditional headers, and no-store. A GET reads and never writes.
+ */
+export const serveRecoverPage: RouteHandler = async ({ request, env }) => {
+  if (envCredentialsSet(env) || (await loadAuthState(env.DB)).settings.recoveryHash === null) return plain(404, "Not found.");
+  const page = await assets(env).fetch(new Request(new URL("/recover", request.url), { method: "GET" }));
   const out = new Response(page.body, page);
   for (const [name, value] of Object.entries(noStore)) out.headers.set(name, value);
   return out;

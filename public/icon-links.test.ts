@@ -37,7 +37,7 @@ describe("the icon, touch icon and manifest links in every page", () => {
   it("covers every page: the public pages and all the admin pages", () => {
     expect(PAGES).toEqual([
       "admin/edit.html", "admin/index.html", "admin/login.html", "admin/new.html", "admin/schedule.html", "admin/settings.html", "admin/templates.html",
-      "event.html", "index.html", "setup.html",
+      "event.html", "index.html", "recover.html", "setup.html",
     ]);
   });
 

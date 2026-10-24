@@ -76,6 +76,11 @@ export async function setupClientKey(ip: string | null, setupCode: string): Prom
   return hmacHex(setupCode, `slot-booker-setup-ratelimit-v1:${rateLimitBucket(ip)}`);
 }
 
+/** The /recover rate-limit key: keyed with the stored recovery hash and domain-separated, so recovery attempts are counted apart from sign-in and setup. */
+export async function recoveryClientKey(ip: string | null, recoveryHash: string): Promise<string> {
+  return hmacHex(recoveryHash, `slot-booker-recover-ratelimit-v1:${rateLimitBucket(ip)}`);
+}
+
 /** The one key every /setup attempt is also counted under, whoever sent it: not derived from SETUP_CODE and holding no personal data. */
 export const SETUP_GLOBAL_KEY = "slot-booker-setup-global-v1";
 /** Attempts across all visitors per window: a cap on guessing by an attacker who rotates addresses (the per-visitor limit is 5). */

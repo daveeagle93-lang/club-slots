@@ -8,7 +8,7 @@ const table = createRoutes();
 const ROUTES_DIR = join(import.meta.dirname, "../routes");
 
 /** Patterns for things that are not files under src/routes/: the public pages the Worker sees first. */
-const PAGE_PATTERNS = ["/", "/e/:slug", "/setup"];
+const PAGE_PATTERNS = ["/", "/e/:slug", "/setup", "/recover"];
 
 /** `api/admin/events/[slug]/export.csv.ts` -> `/api/admin/events/:slug/export.csv`; `index.ts` stands for its directory. */
 const patternOf = (file: string): string => {
@@ -43,8 +43,8 @@ describe("the route table matches the handler files", () => {
       expect(entries.map((r) => r.method).sort(), file).toEqual(exported.map((k) => METHOD_OF[k]).sort());
       for (const entry of entries) {
         const name = Object.keys(METHOD_OF).find((k) => METHOD_OF[k] === entry.method)!;
-        // The login and setup handlers are built per Worker (so tests can inject a clock); they are not the exported instances.
-        if (pattern === "/api/admin/login" || pattern === "/api/setup") expect(typeof entry.handler, label(entry)).toBe("function");
+        // The login, setup and recover handlers are built per Worker (so tests can inject a clock); they are not the exported instances.
+        if (pattern === "/api/admin/login" || pattern === "/api/setup" || pattern === "/api/recover") expect(typeof entry.handler, label(entry)).toBe("function");
         else expect(entry.handler, `${label(entry)} -> ${file}`).toBe(module[name]);
       }
     }
@@ -72,6 +72,7 @@ describe("access", () => {
       "* /api/icon/:size",
       "* /api/logo",
       "* /api/manifest.webmanifest",
+      "POST /api/recover",
       "GET /api/settings",
       "GET /api/setup",
       "POST /api/setup",
@@ -80,6 +81,7 @@ describe("access", () => {
       "GET /",
       "GET /e/:slug",
       "GET /setup",
+      "GET /recover",
     ]);
   });
 

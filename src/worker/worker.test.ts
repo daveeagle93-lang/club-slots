@@ -804,3 +804,98 @@ describe("the landing page and the claim redirect", () => {
     expect(authReads()).toBe(1);
   });
 });
+
+describe("the recovery page through the Worker", () => {
+  const CODE_HASH = "hmac-sha256$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  const setRecoveryHash = (hash: string | null) => t.env.DB.prepare("UPDATE auth_settings SET recovery_hash = ? WHERE id = 1").bind(hash).run();
+  const state = async () => JSON.stringify([
+    (await t.env.DB.prepare("SELECT * FROM auth_settings").all()).results,
+    (await t.env.DB.prepare("SELECT * FROM admin_credentials").all()).results,
+    (await t.env.DB.prepare("SELECT * FROM login_attempts").all()).results,
+  ]);
+
+  it("serves GET /recover from the clean /recover asset when a recovery code is stored: no conditional headers, no-store, security headers", async () => {
+    await setRecoveryHash(CODE_HASH);
+    try {
+      const { seen, fetcher } = recordingAssets();
+      const res = await send({ ...d1Env(t.env.DB), ASSETS: fetcher }, "/recover", { headers: { "If-None-Match": '"x"', "If-Modified-Since": "Mon, 01 Jan 2024 00:00:00 GMT", Cookie: "a=b" } });
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe("asset:/recover");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(hasSecurityHeaders(res)).toBe(true);
+      expect(seen).toHaveLength(1);
+      expect(seen[0].method).toBe("GET");
+      expect(new URL(seen[0].url).pathname).toBe("/recover");
+      expect(seen[0].headers.get("if-none-match")).toBeNull();
+      expect(seen[0].headers.get("cookie")).toBeNull();
+      expect((await send({ ...d1Env(t.env.DB), ASSETS: fetcher }, "/recover", { method: "HEAD" })).status).toBe(200);
+    } finally {
+      await setRecoveryHash(null);
+    }
+  });
+
+  it("serves it in Access mode too, and with ADMIN_AUTH=access in the environment", async () => {
+    await setRecoveryHash(CODE_HASH);
+    try {
+      const { fetcher } = recordingAssets();
+      expect((await send({ ...d1Env(t.env.DB, { ADMIN_AUTH: "access" }), ASSETS: fetcher }, "/recover")).status).toBe(200);
+    } finally {
+      await setRecoveryHash(null);
+    }
+  });
+
+  it("answers GET /recover with 404, without touching the assets, when no recovery code is stored or the credentials come from the environment", async () => {
+    const { seen, fetcher } = recordingAssets();
+    const full = await passwordEnv(t.env.DB);
+    const res = await send({ ...d1Env(t.env.DB), ASSETS: fetcher }, "/recover");
+    expect(res.status).toBe(404);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(hasSecurityHeaders(res)).toBe(true);
+    await setRecoveryHash(CODE_HASH);
+    try {
+      for (const over of [{ ADMIN_PASSWORD_HASH: full.ADMIN_PASSWORD_HASH }, { ADMIN_SESSION_SECRET: "s".repeat(43) }]) {
+        const blocked = await send({ ...d1Env(t.env.DB, over), ASSETS: fetcher }, "/recover");
+        expect(blocked.status, JSON.stringify(Object.keys(over))).toBe(404);
+        expect(blocked.headers.get("cache-control")).toBe("no-store");
+      }
+    } finally {
+      await setRecoveryHash(null);
+    }
+    expect(seen).toHaveLength(0);
+  });
+
+  it("never changes anything on GET or HEAD", async () => {
+    await setRecoveryHash(CODE_HASH);
+    try {
+      const before = await state();
+      const { fetcher } = recordingAssets();
+      for (const method of ["GET", "HEAD"]) await send({ ...d1Env(t.env.DB), ASSETS: fetcher }, "/recover", { method });
+      expect(await state()).toBe(before);
+    } finally {
+      await setRecoveryHash(null);
+    }
+  });
+
+  it("allows only GET and HEAD on /recover, and only POST on /api/recover", async () => {
+    const env = { ...d1Env(t.env.DB), ASSETS: recordingAssets().fetcher };
+    for (const method of ["POST", "PUT", "DELETE"]) expect((await send(env, "/recover", { method })).status, method).toBe(405);
+    expect((await send(env, "/recover", { method: "POST" })).headers.get("allow")).toBe("GET, HEAD");
+    expect((await send(env, "/api/recover", { method: "GET" })).status).toBe(405);
+    expect((await send(env, "/api/recover", { method: "GET" })).headers.get("allow")).toBe("POST");
+  });
+
+  it("does not treat variants of the path as the page", async () => {
+    await setRecoveryHash(CODE_HASH);
+    try {
+      const { seen, fetcher } = recordingAssets();
+      const env = { ...d1Env(t.env.DB), ASSETS: fetcher };
+      for (const path of ["/Recover", "/recover/", "/%72ecover"]) {
+        seen.length = 0;
+        await send(env, path);
+        expect(seen.map((r) => new URL(r.url).pathname), path).toEqual([path]);
+      }
+    } finally {
+      await setRecoveryHash(null);
+    }
+  });
+});

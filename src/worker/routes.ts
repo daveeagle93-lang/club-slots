@@ -31,12 +31,13 @@ import { onRequestGet as health } from "../routes/api/health";
 import { onRequest as icon } from "../routes/api/icon/[size]";
 import { onRequest as logo } from "../routes/api/logo";
 import { onRequest as manifest } from "../routes/api/manifest.webmanifest";
+import { createRecoverHandler } from "../routes/api/recover";
 import { createSetupHandler, createSetupStatusHandler } from "../routes/api/setup";
 import { onRequestGet as publicSettings } from "../routes/api/settings";
 import { onRequest as themeCss } from "../routes/api/theme.css";
 import { onRequest as favicon } from "../routes/favicon.ico";
 import type { Route } from "./router";
-import { serveEventPage, serveLandingPage, serveSetupPage } from "./static";
+import { serveEventPage, serveLandingPage, serveRecoverPage, serveSetupPage } from "./static";
 
 /**
  * Every route the Worker answers itself. Anything not listed is a 404 (under /api/) or a static file. The admin guard
@@ -88,6 +89,8 @@ export function createRoutes(deps?: AuthDeps): Route[] {
     { method: "*", pattern: "/api/icon/:size", handler: icon, access: "public" },
     { method: "*", pattern: "/api/logo", handler: logo, access: "public" },
     { method: "*", pattern: "/api/manifest.webmanifest", handler: manifest, access: "public" },
+    // Recovery with the recovery code. Public, so it guards itself (src/routes/api/recover.ts): 404 unless a recovery code is stored.
+    { method: "POST", pattern: "/api/recover", handler: createRecoverHandler(deps), access: "public" },
     { method: "GET", pattern: "/api/settings", handler: publicSettings, access: "public" },
     // First-run admin setup. Public, so it guards itself (src/server/setup.ts): 404 unless setup is open. GET only reports the state.
     { method: "GET", pattern: "/api/setup", handler: createSetupStatusHandler(deps), access: "public" },
@@ -99,5 +102,6 @@ export function createRoutes(deps?: AuthDeps): Route[] {
     { method: "GET", pattern: "/", handler: serveLandingPage, access: "public" },
     { method: "GET", pattern: "/e/:slug", handler: serveEventPage, access: "public" },
     { method: "GET", pattern: "/setup", handler: serveSetupPage, access: "public" },
+    { method: "GET", pattern: "/recover", handler: serveRecoverPage, access: "public" },
   ];
 }

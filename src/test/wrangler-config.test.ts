@@ -36,7 +36,7 @@ it("is a Worker (not a Pages project) whose entry point is src/worker.ts", () =>
 // Changing this list changes what can be reached without the guards: do it on purpose.
 it("runs the Worker first for exactly the paths the guards and routes need", () => {
   for (const env of [undefined, "preview"]) {
-    expect(config(env).assets?.run_worker_first, String(env)).toEqual(["/", "/e/*", "/api/*", "/admin", "/admin/*", "/setup"]);
+    expect(config(env).assets?.run_worker_first, String(env)).toEqual(["/", "/e/*", "/api/*", "/admin", "/admin/*", "/setup", "/recover"]);
   }
 });
 
