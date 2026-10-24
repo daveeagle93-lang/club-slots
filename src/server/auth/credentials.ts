@@ -17,18 +17,29 @@ export async function loadCredentials(db: D1Database): Promise<StoredCredentials
 
 /**
  * Stores the credentials made on /setup, replacing earlier ones, in one statement that does nothing once the first
- * sign-in is recorded. False means it did nothing (setup has just been closed by a sign-in).
+ * sign-in is recorded. False means it did nothing (setup has just been closed by a sign-in). With `recoveryHash`, the
+ * same batch stores it too, but only if the credentials written are this caller's.
  */
 export async function saveCredentials(
-  db: D1Database, { secretHash, sessionSecret, createdAt }: { secretHash: string; sessionSecret: string; createdAt: string },
+  db: D1Database,
+  { secretHash, sessionSecret, createdAt, recoveryHash }: { secretHash: string; sessionSecret: string; createdAt: string; recoveryHash?: string },
 ): Promise<boolean> {
-  const row = await db.prepare(
+  const upsert = db.prepare(
     `INSERT INTO admin_credentials (id, secret_hash, session_secret, created_at) VALUES (1, ?, ?, ?)
      ON CONFLICT (id) DO UPDATE SET secret_hash = excluded.secret_hash, session_secret = excluded.session_secret, created_at = excluded.created_at
      WHERE admin_credentials.first_login_at IS NULL
      RETURNING id`,
-  ).bind(secretHash, sessionSecret, createdAt).first();
-  return row !== null;
+  ).bind(secretHash, sessionSecret, createdAt);
+  if (recoveryHash === undefined) return (await upsert.first()) !== null;
+  const [saved] = await db.batch([
+    upsert,
+    // The salted secret hash proves the row above is this caller's; a closed or lost setup leaves the recovery hash alone.
+    db.prepare(
+      `UPDATE auth_settings SET recovery_hash = ?, recovery_created_at = ?
+       WHERE id = 1 AND EXISTS (SELECT 1 FROM admin_credentials WHERE secret_hash = ? AND first_login_at IS NULL)`,
+    ).bind(recoveryHash, createdAt, secretHash),
+  ]);
+  return saved.results.length > 0;
 }
 
 /**

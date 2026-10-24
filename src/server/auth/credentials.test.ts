@@ -1,11 +1,17 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestEnv, type TestEnv } from "../../test/db";
+import { generateAdminSecret, hashAdminSecret } from "./crypto";
 import { loadCredentials, markFirstSignIn, saveCredentials } from "./credentials";
 
 let t: TestEnv;
 beforeAll(async () => { t = await createTestEnv(); });
 afterAll(async () => { await t.dispose(); });
-beforeEach(async () => { await t.env.DB.prepare("DELETE FROM admin_credentials").run(); });
+beforeEach(async () => {
+  await t.env.DB.batch([
+    t.env.DB.prepare("DELETE FROM admin_credentials"),
+    t.env.DB.prepare("UPDATE auth_settings SET recovery_hash = NULL, recovery_created_at = NULL WHERE id = 1"),
+  ]);
+});
 
 const H1 = `hmac-sha256$${"A".repeat(22)}$${"B".repeat(43)}`;
 const H2 = `hmac-sha256$${"C".repeat(22)}$${"D".repeat(43)}`;
@@ -13,6 +19,8 @@ const S1 = "1".repeat(43);
 const S2 = "2".repeat(43);
 const T1 = "2026-10-05T10:00:00.000Z";
 const T2 = "2026-10-05T11:00:00.000Z";
+const recovery = () => t.env.DB.prepare("SELECT recovery_hash, recovery_created_at FROM auth_settings WHERE id = 1")
+  .first<{ recovery_hash: string | null; recovery_created_at: string | null }>();
 const raw = () => t.env.DB.prepare("SELECT * FROM admin_credentials").all();
 
 describe("loadCredentials", () => {
@@ -42,6 +50,39 @@ describe("saveCredentials", () => {
     expect(await saveCredentials(t.env.DB, { secretHash: H2, sessionSecret: S2, createdAt: "2026-10-05T12:00:00.000Z" })).toBe(false);
     expect((await raw()).results).toEqual(before);
     expect(before).toEqual([{ id: 1, secret_hash: H1, session_secret: S1, created_at: T1, first_login_at: T2 }]);
+  });
+
+  it("with a recovery hash, stores it with the credentials", async () => {
+    const recoveryHash = await hashAdminSecret(generateAdminSecret());
+    expect(await saveCredentials(t.env.DB, { secretHash: H1, sessionSecret: S1, createdAt: T1, recoveryHash })).toBe(true);
+    expect((await raw()).results).toEqual([{ id: 1, secret_hash: H1, session_secret: S1, created_at: T1, first_login_at: null }]);
+    expect(await recovery()).toEqual({ recovery_hash: recoveryHash, recovery_created_at: T1 });
+  });
+
+  it("without a recovery hash, leaves the stored one alone", async () => {
+    const recoveryHash = await hashAdminSecret(generateAdminSecret());
+    await saveCredentials(t.env.DB, { secretHash: H1, sessionSecret: S1, createdAt: T1, recoveryHash });
+    expect(await saveCredentials(t.env.DB, { secretHash: H2, sessionSecret: S2, createdAt: T2 })).toBe(true);
+    expect(await recovery()).toEqual({ recovery_hash: recoveryHash, recovery_created_at: T1 });
+  });
+
+  it("replaces the recovery hash along with the credentials while nobody has signed in", async () => {
+    const first = await hashAdminSecret(generateAdminSecret());
+    const second = await hashAdminSecret(generateAdminSecret());
+    await saveCredentials(t.env.DB, { secretHash: H1, sessionSecret: S1, createdAt: T1, recoveryHash: first });
+    expect(await saveCredentials(t.env.DB, { secretHash: H2, sessionSecret: S2, createdAt: T2, recoveryHash: second })).toBe(true);
+    expect(await recovery()).toEqual({ recovery_hash: second, recovery_created_at: T2 });
+  });
+
+  it("writes no recovery hash once the first sign-in is recorded (false, and both rows unchanged)", async () => {
+    const recoveryHash = await hashAdminSecret(generateAdminSecret());
+    await saveCredentials(t.env.DB, { secretHash: H1, sessionSecret: S1, createdAt: T1, recoveryHash });
+    await markFirstSignIn(t.env.DB, H1, T2);
+    const before = (await raw()).results;
+    const attempt = await hashAdminSecret(generateAdminSecret());
+    expect(await saveCredentials(t.env.DB, { secretHash: H2, sessionSecret: S2, createdAt: T2, recoveryHash: attempt })).toBe(false);
+    expect((await raw()).results).toEqual(before);
+    expect(await recovery()).toEqual({ recovery_hash: recoveryHash, recovery_created_at: T1 });
   });
 });
 
