@@ -37,9 +37,9 @@
     {
       "binding": "DB",
       // The test global-setup migrates this name locally: do not rename it.
-      "database_name": "slot-booker-db",
+      "database_name": "club-slots-db",
       // Placeholder: replaced by provisioning.
-      "database_id": "a4a2ca6c-438a-439e-8377-d232ca7812d6",
+      "database_id": "d574f99c-30d1-4c31-aa45-f651dbff8026",
       "migrations_dir": "migrations"
     }
   ],
