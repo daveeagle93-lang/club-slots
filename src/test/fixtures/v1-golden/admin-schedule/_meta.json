@@ -1,0 +1,98 @@
+{
+  "e1-add-open": {
+    "title": ""
+  },
+  "e1-add-submitted-empty": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/admin/session"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/admin/events/saturday-trial-2026-10-17"
+      },
+      {
+        "body": {
+          "dogName": "",
+          "handlerName": "",
+          "slot": "2026-10-17T10:20:00Z"
+        },
+        "method": "POST",
+        "url": "/api/admin/events/saturday-trial-2026-10-17/bookings"
+      }
+    ],
+    "title": ""
+  },
+  "e1-after-copy": {
+    "title": ""
+  },
+  "e1-clear-open": {
+    "title": ""
+  },
+  "e1-move-open": {
+    "title": ""
+  },
+  "e1-schedule": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/admin/session"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/admin/events/saturday-trial-2026-10-17"
+      }
+    ],
+    "title": ""
+  },
+  "e1-swap-open": {
+    "title": ""
+  },
+  "e2-orphan-clear-open": {
+    "title": ""
+  },
+  "e2-orphan-move-open": {
+    "title": ""
+  },
+  "e2-schedule-with-orphan": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/admin/session"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/admin/events/evening-run-2026-10-20"
+      }
+    ],
+    "title": ""
+  },
+  "e3-archived-schedule": {
+    "title": ""
+  },
+  "unknown-event": {
+    "title": ""
+  }
+}

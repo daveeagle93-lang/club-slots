@@ -1,0 +1,16 @@
+{
+  "body": {
+    "clubName": "Hillside Agility Club",
+    "logo": null,
+    "privacyContact": {
+      "email": "privacy@hillside-agility.example",
+      "name": "Jo Bennett"
+    },
+    "website": "https://hillside-agility.example/"
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

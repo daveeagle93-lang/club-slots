@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex" />
+    <title>Templates</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/admin/admin.css" />
+    <link rel="stylesheet" href="/api/theme.css" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/api/icon/32" />
+    <link rel="apple-touch-icon" href="/api/icon/180" />
+    <link rel="manifest" href="/api/manifest.webmanifest?for=admin" />
+    <script type="module" src="/admin/templates.js"></script>
+  </head>
+  <body>
+    <nav class="admin-nav" aria-label="Admin">
+      <a href="/admin/">Events</a>
+      <a href="/admin/templates" aria-current="page">Templates</a>
+      <a href="/admin/settings">Settings</a>
+    </nav>
+    <main id="app" class="admin" data-autostart>
+      <p class="message" role="status">Loading…</p>
+      <noscript><p class="message">This page needs JavaScript.</p></noscript>
+    </main>
+  </body>
+</html>

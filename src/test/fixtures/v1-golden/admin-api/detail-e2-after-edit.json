@@ -1,0 +1,59 @@
+{
+  "body": {
+    "defaultShareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+    "event": {
+      "archived": false,
+      "breaks": [],
+      "costPence": 800,
+      "date": "2026-10-20",
+      "details": "Floodlit ring. Wear sensible shoes.",
+      "end": "19:00",
+      "endUtc": "2026-10-20T18:00:00Z",
+      "gapMinutes": 0,
+      "listed": true,
+      "name": "Evening Run",
+      "sessionMinutes": 20,
+      "shareMessage": "",
+      "slug": "evening-run-2026-10-20",
+      "start": "18:00",
+      "startUtc": "2026-10-20T17:00:00Z",
+      "venuePostcode": "AB1 2CD"
+    },
+    "lineup": "Hillside Agility Club\nEvening Run\nTuesday 20 October 2026 · AB1 2CD\n\n18:00 — Moss — Gwen Davies\n18:20 — Nell — Al Penn\n18:40 — Skye — Tariq Ali",
+    "orphans": [],
+    "slots": [
+      {
+        "booking": {
+          "dogName": "Moss",
+          "handlerName": "Gwen Davies",
+          "id": 7
+        },
+        "end": "2026-10-20T17:20:00Z",
+        "start": "2026-10-20T17:00:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Nell",
+          "handlerName": "Al Penn",
+          "id": 17
+        },
+        "end": "2026-10-20T17:40:00Z",
+        "start": "2026-10-20T17:20:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Skye",
+          "handlerName": "Tariq Ali",
+          "id": 8
+        },
+        "end": "2026-10-20T18:00:00Z",
+        "start": "2026-10-20T17:40:00Z"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

@@ -1,0 +1,51 @@
+{
+  "body": {
+    "bookings": {
+      "closesAt": "2026-10-20T17:00:00Z",
+      "open": true
+    },
+    "event": {
+      "archived": false,
+      "costPence": 800,
+      "details": "Floodlit ring. Wear sensible shoes.",
+      "endUtc": "2026-10-20T19:00:00Z",
+      "name": "Evening Run",
+      "slug": "evening-run-2026-10-20",
+      "startUtc": "2026-10-20T17:00:00Z",
+      "venuePostcode": "AB1 2CD"
+    },
+    "privacyNotice": "We store your name, your dog's name and the slot you choose so the club can run the event. The club's organisers can see these details; other people using this page only see which slots are taken. The organisers may share the running order, with names, with other participants (for example in a group chat). The details are kept until an organiser deletes the event; nothing is deleted automatically.",
+    "slots": [
+      {
+        "end": "2026-10-20T17:20:00Z",
+        "start": "2026-10-20T17:00:00Z",
+        "status": "taken"
+      },
+      {
+        "end": "2026-10-20T17:40:00Z",
+        "start": "2026-10-20T17:20:00Z",
+        "status": "free"
+      },
+      {
+        "end": "2026-10-20T18:00:00Z",
+        "start": "2026-10-20T17:40:00Z",
+        "status": "taken"
+      },
+      {
+        "end": "2026-10-20T18:30:00Z",
+        "start": "2026-10-20T18:10:00Z",
+        "status": "free"
+      },
+      {
+        "end": "2026-10-20T18:50:00Z",
+        "start": "2026-10-20T18:30:00Z",
+        "status": "taken"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

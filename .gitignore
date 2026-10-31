@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Wrangler / Cloudflare local state
+.wrangler/
+
+# Your account's ids and settings, and the Wrangler config generated from them by `npm run configure`
+account.local.json
+wrangler.json
+
+# Local environment and secrets (examples are committed)
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+!.env.example
+secrets.json
+*.pem
+*.key
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Per-session working notes (local only)
+session-notes-*.md
+
+# Database exports: a `wrangler d1 export` backup contains the admin_credentials row (the admin secret hash and the session signing key)
+*backup*.sql

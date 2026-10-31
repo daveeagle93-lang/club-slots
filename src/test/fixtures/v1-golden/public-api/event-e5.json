@@ -1,0 +1,86 @@
+{
+  "body": {
+    "bookings": {
+      "closesAt": "2026-09-12T08:00:00Z",
+      "open": false
+    },
+    "event": {
+      "archived": false,
+      "costPence": 1000,
+      "details": "Thanks to everyone who came.",
+      "endUtc": "2026-09-12T11:00:00Z",
+      "name": "Summer Agility Day",
+      "slug": "summer-agility-day-2026-09-12",
+      "startUtc": "2026-09-12T08:00:00Z",
+      "venuePostcode": "AB1 2CD"
+    },
+    "privacyNotice": "We store your name, your dog's name and the slot you choose so the club can run the event. The club's organisers can see these details; other people using this page only see which slots are taken. The organisers may share the running order, with names, with other participants (for example in a group chat). The details are kept until an organiser deletes the event; nothing is deleted automatically.",
+    "slots": [
+      {
+        "end": "2026-09-12T08:15:00Z",
+        "start": "2026-09-12T08:00:00Z",
+        "status": "taken"
+      },
+      {
+        "end": "2026-09-12T08:30:00Z",
+        "start": "2026-09-12T08:15:00Z",
+        "status": "taken"
+      },
+      {
+        "end": "2026-09-12T08:45:00Z",
+        "start": "2026-09-12T08:30:00Z",
+        "status": "past"
+      },
+      {
+        "end": "2026-09-12T09:00:00Z",
+        "start": "2026-09-12T08:45:00Z",
+        "status": "past"
+      },
+      {
+        "end": "2026-09-12T09:15:00Z",
+        "start": "2026-09-12T09:00:00Z",
+        "status": "taken"
+      },
+      {
+        "end": "2026-09-12T09:30:00Z",
+        "start": "2026-09-12T09:15:00Z",
+        "status": "past"
+      },
+      {
+        "end": "2026-09-12T09:45:00Z",
+        "start": "2026-09-12T09:30:00Z",
+        "status": "past"
+      },
+      {
+        "end": "2026-09-12T10:00:00Z",
+        "start": "2026-09-12T09:45:00Z",
+        "status": "past"
+      },
+      {
+        "end": "2026-09-12T10:15:00Z",
+        "start": "2026-09-12T10:00:00Z",
+        "status": "past"
+      },
+      {
+        "end": "2026-09-12T10:30:00Z",
+        "start": "2026-09-12T10:15:00Z",
+        "status": "past"
+      },
+      {
+        "end": "2026-09-12T10:45:00Z",
+        "start": "2026-09-12T10:30:00Z",
+        "status": "past"
+      },
+      {
+        "end": "2026-09-12T11:00:00Z",
+        "start": "2026-09-12T10:45:00Z",
+        "status": "past"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

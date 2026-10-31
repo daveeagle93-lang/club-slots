@@ -1,0 +1,469 @@
+{
+  "dogName 81 characters": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name must be at most 80 characters."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName ZWJ emoji": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain invisible or direction-changing characters. Some emoji and flags contain invisible joiners and are not accepted; try plain text."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName braille blank": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain private-use or blank-looking characters. Try plain text."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName control character": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain control characters."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName empty": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "Enter the dog's name."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName exactly 80 characters passes validation (then invalid_slot, as the slot is not real)": {
+    "body": {
+      "error": {
+        "code": "invalid_slot",
+        "message": "That time isn't one of this event's slots."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName line separator U+2028": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain line or paragraph separators."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName lone surrogate": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain unpaired surrogate characters."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName missing": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "Enter the dog's name."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName newline": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain control characters."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName not a string": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "Enter the dog's name."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName only a variation selector and space": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name must contain at least one letter or number."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName only emoji": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name must contain at least one letter or number."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName only spaces": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "Enter the dog's name."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName private use": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain private-use or blank-looking characters. Try plain text."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName right-to-left override": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain invisible or direction-changing characters. Some emoji and flags contain invisible joiners and are not accepted; try plain text."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "dogName zero-width space": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain invisible or direction-changing characters. Some emoji and flags contain invisible joiners and are not accepted; try plain text."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "every field missing": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "Enter the dog's name.",
+        "handlerName": "Enter the handler's name.",
+        "idempotencyKey": "Reload the page and try again.",
+        "slot": "Choose a slot."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "everything wrong": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "Enter the dog's name.",
+        "handlerName": "The handler's name can't contain invisible or direction-changing characters. Some emoji and flags contain invisible joiners and are not accepted; try plain text.",
+        "idempotencyKey": "Reload the page and try again.",
+        "slot": "Choose a slot."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "handlerName 81 characters": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "handlerName": "The handler's name must be at most 80 characters."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "handlerName empty": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "handlerName": "Enter the handler's name."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "handlerName missing": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "handlerName": "Enter the handler's name."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "handlerName only symbols": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "handlerName": "The handler's name must contain at least one letter or number."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "handlerName zero-width joiner": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "handlerName": "The handler's name can't contain invisible or direction-changing characters. Some emoji and flags contain invisible joiners and are not accepted; try plain text."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "idempotencyKey bad characters": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "idempotencyKey": "Reload the page and try again."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "idempotencyKey missing": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "idempotencyKey": "Reload the page and try again."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "idempotencyKey too short": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "idempotencyKey": "Reload the page and try again."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "slot missing": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "slot": "Choose a slot."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "slot not a string": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "slot": "Choose a slot."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  }
+}

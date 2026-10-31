@@ -1,0 +1,95 @@
+{
+  "cleared (booking 5)": {
+    "body": {
+      "removed": {
+        "dogName": "Sir Barksalot the Third of Hillside, Defender of the Agility Ring and Every Tunn",
+        "handlerName": "Lou Brown",
+        "id": 5,
+        "slotStart": "2026-10-17T12:05:00Z"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  "cleared again: not_found": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Booking not found."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  },
+  "confirmation_required (confirm false)": {
+    "body": {
+      "error": {
+        "code": "confirmation_required",
+        "message": "Confirm that you want to clear this booking."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "confirmation_required (confirm is the string true)": {
+    "body": {
+      "error": {
+        "code": "confirmation_required",
+        "message": "Confirm that you want to clear this booking."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "confirmation_required (empty body)": {
+    "body": {
+      "error": {
+        "code": "confirmation_required",
+        "message": "Confirm that you want to clear this booking."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "not_found (booking of another event)": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Booking not found."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  },
+  "unsupported_media_type (no body, so no JSON content type)": {
+    "body": {
+      "error": {
+        "code": "unsupported_media_type",
+        "message": "Send the request as application/json."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 415
+  }
+}

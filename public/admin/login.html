@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex" />
+    <title>Admin sign-in</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/api/theme.css" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/api/icon/32" />
+    <link rel="apple-touch-icon" href="/api/icon/180" />
+    <link rel="manifest" href="/api/manifest.webmanifest?for=admin" />
+    <script type="module" src="/admin/login.js"></script>
+  </head>
+  <body>
+    <main id="app" class="login" data-autostart>
+      <h1>Admin sign-in</h1>
+      <p id="login-status" class="message">Checking…</p>
+      <form id="login-form" method="post" hidden>
+        <div class="field">
+          <label for="password">Admin secret</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="off" autocorrect="off" maxlength="256" required />
+        </div>
+        <p id="login-error" class="form-error" role="alert"></p>
+        <button type="submit" class="button primary">Sign in</button>
+      </form>
+      <noscript><p class="message">This page needs JavaScript to sign in.</p></noscript>
+    </main>
+  </body>
+</html>

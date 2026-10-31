@@ -1,0 +1,15 @@
+{
+  "productionDatabaseId": "<database_id printed by: npx wrangler d1 create slot-booker-db>",
+  "previewDatabaseId": "<database_id printed by: npx wrangler d1 create slot-booker-db-preview>",
+  "vars": {
+    "BOOKING_CUTOFF_OFFSET_MINUTES": "-30"
+  },
+  "previewVars": {
+    "ADMIN_AUTH": "password"
+  },
+  "productionVars": {
+    "ADMIN_AUTH": "access",
+    "ACCESS_TEAM_DOMAIN": "<your-team-name>.cloudflareaccess.com",
+    "ACCESS_AUD": "<the Access application's AUD tag>"
+  }
+}

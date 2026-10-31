@@ -1,0 +1,29 @@
+{
+  "body": {
+    "template": {
+      "breaks": [
+        {
+          "end": "19:10",
+          "label": "",
+          "start": "19:00"
+        }
+      ],
+      "costPence": 800,
+      "details": "Floodlit ring.",
+      "end": "20:00",
+      "gapMinutes": 0,
+      "id": 2,
+      "isDefault": false,
+      "name": "Evening run",
+      "sessionMinutes": 20,
+      "shareMessage": "",
+      "start": "18:00",
+      "venuePostcode": "AB1 2CD"
+    }
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

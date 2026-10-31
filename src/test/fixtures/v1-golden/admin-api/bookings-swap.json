@@ -1,0 +1,104 @@
+{
+  "changed (booking 3 is no longer where the admin saw it)": {
+    "body": {
+      "error": {
+        "code": "changed",
+        "message": "This booking was changed by someone else. Reload the page."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  "invalid_input (nothing sent)": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "a": "Send the id and slot of the first booking.",
+        "b": "Send the id and slot of the second booking."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "invalid_input (one side bad)": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "b": "Send the id and slot of the second booking."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "not_found (booking of another event)": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Booking not found."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  },
+  "not_found (unknown id)": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Booking not found."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  },
+  "same_booking": {
+    "body": {
+      "error": {
+        "code": "same_booking",
+        "message": "Choose two different bookings."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "swapped (bookings 3 and 4)": {
+    "body": {
+      "a": {
+        "id": 3,
+        "slotStart": "2026-10-17T10:55:00Z"
+      },
+      "b": {
+        "id": 4,
+        "slotStart": "2026-10-17T09:45:00Z"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 200
+  }
+}

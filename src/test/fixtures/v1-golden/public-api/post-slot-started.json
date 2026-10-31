@@ -1,0 +1,53 @@
+{
+  "created in a later slot while the event is running": {
+    "body": {
+      "booking": {
+        "dogName": "Brisk",
+        "handlerName": "Lena Fox",
+        "slot": {
+          "end": "2026-10-17T13:10:00Z",
+          "start": "2026-10-17T12:40:00Z"
+        }
+      },
+      "event": {
+        "archived": false,
+        "costPence": 1250,
+        "details": "Bring water for your dog.\nPark in the top field.\n\nGates open at 08:30.",
+        "endUtc": "2026-10-17T14:00:00Z",
+        "name": "Saturday Trial",
+        "slug": "saturday-trial-2026-10-17",
+        "startUtc": "2026-10-17T08:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      },
+      "icsUrl": "/api/events/saturday-trial-2026-10-17/bookings/<token>/ics"
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 201
+  },
+  "slot_started (09:35 slot has started; window open via cut-off)": {
+    "body": {
+      "error": {
+        "code": "slot_started",
+        "message": "That session has already started."
+      },
+      "freeSlots": [
+        {
+          "end": "2026-10-17T12:00:00Z",
+          "start": "2026-10-17T11:30:00Z"
+        },
+        {
+          "end": "2026-10-17T13:10:00Z",
+          "start": "2026-10-17T12:40:00Z"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  }
+}

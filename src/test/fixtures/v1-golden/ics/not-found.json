@@ -1,0 +1,13 @@
+{
+  "body": {
+    "error": {
+      "code": "not_found",
+      "message": "Event not found"
+    }
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 404
+}

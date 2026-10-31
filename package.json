@@ -1,0 +1,42 @@
+{
+  "name": "club-slots",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Lightweight slot-booking app for small clubs, on the Cloudflare free tier.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.public.json",
+    "test:webkit": "node scripts/check-ios-date-inputs.mjs",
+    "dev": "wrangler dev",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrations:apply": "wrangler d1 migrations apply DB --remote --env=\"\"",
+    "deploy": "npm run db:migrations:apply && wrangler deploy --env=\"\"",
+    "seed": "node scripts/seed.ts",
+    "seed:local": "node scripts/seed.ts --local",
+    "configure": "node scripts/configure.ts",
+    "generate-admin-secret": "node scripts/generate-admin-secret.ts",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "happy-dom": "^20.14.5",
+    "ical.js": "^2.2.1",
+    "playwright-core": "^1.63.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3",
+    "wrangler": "^4.147.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20261001.1": true
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": {
+        "description": "Your club's booking database. Cloudflare creates it for you, so the suggested name is fine."
+      }
+    }
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "body": {
+    "defaultShareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+    "event": {
+      "archived": false,
+      "breaks": [],
+      "costPence": 1000,
+      "date": "2026-09-12",
+      "details": "Thanks to everyone who came.",
+      "end": "12:00",
+      "endUtc": "2026-09-12T11:00:00Z",
+      "gapMinutes": 0,
+      "listed": true,
+      "name": "Summer Agility Day",
+      "sessionMinutes": 15,
+      "shareMessage": "",
+      "slug": "summer-agility-day-2026-09-12",
+      "start": "09:00",
+      "startUtc": "2026-09-12T08:00:00Z",
+      "venuePostcode": "AB1 2CD"
+    },
+    "lineup": "Hillside Agility Club\nSummer Agility Day\nSaturday 12 September 2026 · AB1 2CD\n\n09:00 — bella — kim lowe\n09:15 — Zoé — Hana Cole\n09:30 — free\n09:45 — free\n10:00 — Fern — Rob  Tait\n10:15 — free\n10:30 — free\n10:45 — free\n11:00 — free\n11:15 — free\n11:30 — free\n11:45 — free",
+    "orphans": [],
+    "slots": [
+      {
+        "booking": {
+          "dogName": "bella",
+          "handlerName": "kim lowe",
+          "id": 14
+        },
+        "end": "2026-09-12T08:15:00Z",
+        "start": "2026-09-12T08:00:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Zoé",
+          "handlerName": "Hana Cole",
+          "id": 15
+        },
+        "end": "2026-09-12T08:30:00Z",
+        "start": "2026-09-12T08:15:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T08:45:00Z",
+        "start": "2026-09-12T08:30:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T09:00:00Z",
+        "start": "2026-09-12T08:45:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Fern",
+          "handlerName": "Rob  Tait",
+          "id": 16
+        },
+        "end": "2026-09-12T09:15:00Z",
+        "start": "2026-09-12T09:00:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T09:30:00Z",
+        "start": "2026-09-12T09:15:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T09:45:00Z",
+        "start": "2026-09-12T09:30:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T10:00:00Z",
+        "start": "2026-09-12T09:45:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T10:15:00Z",
+        "start": "2026-09-12T10:00:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T10:30:00Z",
+        "start": "2026-09-12T10:15:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T10:45:00Z",
+        "start": "2026-09-12T10:30:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-09-12T11:00:00Z",
+        "start": "2026-09-12T10:45:00Z"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

@@ -1,0 +1,23 @@
+{
+  "body": {
+    "events": [
+      {
+        "endUtc": "2026-10-17T14:00:00Z",
+        "name": "Saturday Trial",
+        "slug": "saturday-trial-2026-10-17",
+        "startUtc": "2026-10-17T08:00:00Z"
+      },
+      {
+        "endUtc": "2026-10-20T19:00:00Z",
+        "name": "Evening Run",
+        "slug": "evening-run-2026-10-20",
+        "startUtc": "2026-10-20T17:00:00Z"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

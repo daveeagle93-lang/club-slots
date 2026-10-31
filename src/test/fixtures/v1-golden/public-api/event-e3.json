@@ -1,0 +1,25 @@
+{
+  "body": {
+    "bookings": {
+      "closesAt": "2026-12-05T10:00:00Z",
+      "open": false
+    },
+    "event": {
+      "archived": true,
+      "costPence": 0,
+      "details": "Fancy dress welcome.",
+      "endUtc": "2026-12-05T13:00:00Z",
+      "name": "Winter Fun Day",
+      "slug": "winter-fun-day-2026-12-05",
+      "startUtc": "2026-12-05T10:00:00Z",
+      "venuePostcode": "AB1 2CD"
+    },
+    "privacyNotice": "We store your name, your dog's name and the slot you choose so the club can run the event. The club's organisers can see these details; other people using this page only see which slots are taken. The organisers may share the running order, with names, with other participants (for example in a group chat). The details are kept until an organiser deletes the event; nothing is deleted automatically.",
+    "slots": []
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

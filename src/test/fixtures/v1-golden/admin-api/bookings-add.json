@@ -1,0 +1,195 @@
+{
+  "404 unknown event": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Event not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  },
+  "created": {
+    "body": {
+      "booking": {
+        "dogName": "Willow",
+        "handlerName": "Gail Park",
+        "id": 17,
+        "slotStart": "2026-10-17T10:20:00Z"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 201
+  },
+  "created with names trimmed and inner spaces kept": {
+    "body": {
+      "booking": {
+        "dogName": "Juno",
+        "handlerName": "Ian  Ford",
+        "id": 18,
+        "slotStart": "2026-10-17T11:30:00Z"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 201
+  },
+  "duplicate_booking (booking 2's identity, free slot)": {
+    "body": {
+      "booking": {
+        "dogName": "Zoë",
+        "handlerName": "Ann Lee",
+        "id": 2,
+        "slotStart": "2026-10-17T08:35:00Z"
+      },
+      "error": {
+        "code": "duplicate_booking",
+        "message": "That dog and handler already have a booking for this event."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  "duplicate_booking (own slot, same identity)": {
+    "body": {
+      "booking": {
+        "dogName": "Zoë",
+        "handlerName": "Ann Lee",
+        "id": 2,
+        "slotStart": "2026-10-17T08:35:00Z"
+      },
+      "error": {
+        "code": "duplicate_booking",
+        "message": "That dog and handler already have a booking for this event."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  "invalid_input (handler 81 characters)": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "handlerName": "The handler's name must be at most 80 characters."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "invalid_input (invisible character)": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "The dog's name can't contain invisible or direction-changing characters. Some emoji and flags contain invisible joiners and are not accepted; try plain text."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "invalid_input (nothing sent)": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "dogName": "Enter the dog's name.",
+        "handlerName": "Enter the handler's name.",
+        "slot": "Choose a slot."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "invalid_json": {
+    "body": {
+      "error": {
+        "code": "invalid_json",
+        "message": "The request body isn't valid JSON."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "invalid_slot": {
+    "body": {
+      "error": {
+        "code": "invalid_slot",
+        "message": "That time isn't one of this event's slots."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "slot_taken (holder named)": {
+    "body": {
+      "booking": {
+        "dogName": "Rex 🐶",
+        "handlerName": "Sam Smith",
+        "id": 1
+      },
+      "error": {
+        "code": "slot_taken",
+        "message": "That slot is already taken."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  "slot_taken wins over duplicate (booking 2's identity on booking 1's slot)": {
+    "body": {
+      "booking": {
+        "dogName": "Rex 🐶",
+        "handlerName": "Sam Smith",
+        "id": 1
+      },
+      "error": {
+        "code": "slot_taken",
+        "message": "That slot is already taken."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "changed (booking 3 is not at the slot the admin saw)": {
+    "body": {
+      "error": {
+        "code": "changed",
+        "message": "This booking was changed by someone else. Reload the page."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  "invalid_input (nothing sent)": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "fromSlot": "Send the slot the booking is in.",
+        "toSlot": "Choose a slot."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "invalid_slot (target is no slot)": {
+    "body": {
+      "error": {
+        "code": "invalid_slot",
+        "message": "That time isn't one of this event's slots."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "moved (booking 2: 09:35 to 13:40)": {
+    "body": {
+      "booking": {
+        "dogName": "Zoë",
+        "handlerName": "Ann Lee",
+        "id": 2,
+        "slotStart": "2026-10-17T12:40:00Z"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  "moved onto the freed 09:35 slot (booking 1)": {
+    "body": {
+      "booking": {
+        "dogName": "Rex 🐶",
+        "handlerName": "Sam Smith",
+        "id": 1,
+        "slotStart": "2026-10-17T08:35:00Z"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  "not_found (booking of another event)": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Booking not found."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  },
+  "not_found (id is not a number)": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Booking not found."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  },
+  "not_found (unknown id)": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Booking not found."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  },
+  "same_slot": {
+    "body": {
+      "error": {
+        "code": "same_slot",
+        "message": "The booking is already in that slot."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "slot_taken (holder named)": {
+    "body": {
+      "booking": {
+        "dogName": "Biscuit",
+        "handlerName": "Pat O'Brien",
+        "id": 3
+      },
+      "error": {
+        "code": "slot_taken",
+        "message": "That slot is already taken."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  }
+}

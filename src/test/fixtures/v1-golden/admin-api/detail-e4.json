@@ -1,0 +1,56 @@
+{
+  "body": {
+    "defaultShareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+    "event": {
+      "archived": false,
+      "breaks": [],
+      "costPence": 500,
+      "date": "2026-11-07",
+      "details": "Members only. Ring hire by the half hour.",
+      "end": "15:00",
+      "endUtc": "2026-11-07T15:00:00Z",
+      "gapMinutes": 0,
+      "listed": false,
+      "name": "Members' Ring Time",
+      "sessionMinutes": 30,
+      "shareMessage": "Members only: {event} on {date}, {start}–{end}. {link}",
+      "slug": "members-ring-time-2026-11-07",
+      "start": "13:00",
+      "startUtc": "2026-11-07T13:00:00Z",
+      "venuePostcode": "EF3 4GH"
+    },
+    "lineup": "Hillside Agility Club\nMembers' Ring Time\nSaturday 7 November 2026 · EF3 4GH\n\n13:00 — free\n13:30 — free\n14:00 — Pepper — Cal Doyle\n14:30 — free",
+    "orphans": [],
+    "slots": [
+      {
+        "booking": null,
+        "end": "2026-11-07T13:30:00Z",
+        "start": "2026-11-07T13:00:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-11-07T14:00:00Z",
+        "start": "2026-11-07T13:30:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Pepper",
+          "handlerName": "Cal Doyle",
+          "id": 13
+        },
+        "end": "2026-11-07T14:30:00Z",
+        "start": "2026-11-07T14:00:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-11-07T15:00:00Z",
+        "start": "2026-11-07T14:30:00Z"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

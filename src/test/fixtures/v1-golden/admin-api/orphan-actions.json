@@ -1,0 +1,118 @@
+{
+  "add on a slot of the schedule": {
+    "body": {
+      "booking": {
+        "dogName": "Nell",
+        "handlerName": "Al Penn",
+        "id": 17,
+        "slotStart": "2026-10-20T17:20:00Z"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 201
+  },
+  "detail with the orphan": {
+    "body": {
+      "defaultShareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+      "event": {
+        "archived": false,
+        "breaks": [
+          {
+            "end": "19:10",
+            "endUtc": "2026-10-20T18:10:00Z",
+            "label": "",
+            "start": "19:00",
+            "startUtc": "2026-10-20T18:00:00Z"
+          }
+        ],
+        "costPence": 800,
+        "date": "2026-10-20",
+        "details": "Floodlit ring. Wear sensible shoes.",
+        "end": "20:00",
+        "endUtc": "2026-10-20T19:00:00Z",
+        "gapMinutes": 0,
+        "listed": true,
+        "name": "Evening Run",
+        "sessionMinutes": 20,
+        "shareMessage": "",
+        "slug": "evening-run-2026-10-20",
+        "start": "18:00",
+        "startUtc": "2026-10-20T17:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      },
+      "lineup": "Hillside Agility Club\nEvening Run\nTuesday 20 October 2026 · AB1 2CD\n\n18:00 — Moss — Gwen Davies\n18:20 — Nell — Al Penn\n18:40 — Skye — Tariq Ali\n19:00–19:10 — Break\n19:10 — free\n19:30 — Ruby — Ollie Hart",
+      "orphans": [
+        {
+          "dogName": "Lost Tag",
+          "handlerName": "Ed Cole",
+          "id": 10,
+          "slotStart": "2026-10-20T15:30:00Z"
+        }
+      ],
+      "slots": [
+        {
+          "booking": {
+            "dogName": "Moss",
+            "handlerName": "Gwen Davies",
+            "id": 7
+          },
+          "end": "2026-10-20T17:20:00Z",
+          "start": "2026-10-20T17:00:00Z"
+        },
+        {
+          "booking": {
+            "dogName": "Nell",
+            "handlerName": "Al Penn",
+            "id": 17
+          },
+          "end": "2026-10-20T17:40:00Z",
+          "start": "2026-10-20T17:20:00Z"
+        },
+        {
+          "booking": {
+            "dogName": "Skye",
+            "handlerName": "Tariq Ali",
+            "id": 8
+          },
+          "end": "2026-10-20T18:00:00Z",
+          "start": "2026-10-20T17:40:00Z"
+        },
+        {
+          "booking": null,
+          "end": "2026-10-20T18:30:00Z",
+          "start": "2026-10-20T18:10:00Z"
+        },
+        {
+          "booking": {
+            "dogName": "Ruby",
+            "handlerName": "Ollie Hart",
+            "id": 9
+          },
+          "end": "2026-10-20T18:50:00Z",
+          "start": "2026-10-20T18:30:00Z"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  "swap with an orphan: invalid_slot": {
+    "body": {
+      "error": {
+        "code": "invalid_slot",
+        "message": "That time isn't one of this event's slots."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  }
+}

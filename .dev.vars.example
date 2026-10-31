@@ -1,0 +1,24 @@
+# Settings for this Worker. The "Deploy to Cloudflare" button prompts for nothing here: every line below is commented out.
+# For local development: cp .dev.vars.example .dev.vars (.dev.vars is git-ignored), then run: npm run dev
+# Anything here overrides the same name in wrangler.jsonc when running locally.
+
+# Optional. Set it as a Worker secret to require a code on /setup, to reopen setup after the first-run window, and as recovery for the Access wizard.
+# SETUP_CODE=
+
+# Optional settings; see docs/configuration.md. Defaults apply when unset.
+# Minutes after the event's start when bookings close (negative = earlier). Default 0.
+# BOOKING_CUTOFF_OFFSET_MINUTES=-30
+# Plain-text privacy notice shown on the booking form; \n\n starts a new paragraph. Default: see the docs.
+# PRIVACY_NOTICE="We use your details to run the event.\n\nEmail us to have them deleted."
+
+# Admin sign-in; see docs/admin-auth.md. Unset means password sign-in; nothing sets ADMIN_AUTH for a password site.
+# ADMIN_AUTH=password
+# Password provider override secrets, for existing deployments and local development only: a new deployment
+# creates its admin secret on /setup. Both are SECRETS: real values never go in git or wrangler.jsonc.
+# Keep the single quotes: the hash contains $ characters.
+# ADMIN_PASSWORD_HASH='hmac-sha256$<salt>$<mac>'   # the stdout of: npm run --silent generate-admin-secret (the secret itself is on stderr)
+# ADMIN_SESSION_SECRET='<at least 32 random characters>'     # e.g. from: openssl rand -base64 48
+# Access provider (needs a real Cloudflare Access login in front, so it cannot be tried locally).
+# ADMIN_AUTH=access
+# ACCESS_TEAM_DOMAIN=<your-team>.cloudflareaccess.com
+# ACCESS_AUD=<the Access application's AUD tag>

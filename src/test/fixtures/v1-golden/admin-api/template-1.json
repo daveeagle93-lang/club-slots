@@ -1,0 +1,29 @@
+{
+  "body": {
+    "template": {
+      "breaks": [
+        {
+          "end": "10:45",
+          "label": "Tea",
+          "start": "10:30"
+        }
+      ],
+      "costPence": 1250,
+      "details": "Bring water for your dog.\nPark in the top field.",
+      "end": "15:00",
+      "gapMinutes": 5,
+      "id": 1,
+      "isDefault": true,
+      "name": "Standard trial",
+      "sessionMinutes": 30,
+      "shareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+      "start": "09:00",
+      "venuePostcode": "AB1 2CD"
+    }
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

@@ -1,0 +1,98 @@
+{
+  "body": {
+    "archived": [
+      {
+        "archived": true,
+        "bookedCount": 2,
+        "endUtc": "2026-12-05T13:00:00Z",
+        "listed": true,
+        "name": "Winter Fun Day",
+        "slug": "winter-fun-day-2026-12-05",
+        "startUtc": "2026-12-05T10:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      }
+    ],
+    "archivedHasMore": false,
+    "defaultShareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+    "events": [
+      {
+        "archived": false,
+        "bookedCount": 6,
+        "bookings": {
+          "closesAt": "2026-10-17T08:00:00Z",
+          "open": true
+        },
+        "costPence": 1250,
+        "details": "Bring water for your dog.\nPark in the top field.\n\nGates open at 08:30.",
+        "endUtc": "2026-10-17T14:00:00Z",
+        "full": false,
+        "listed": true,
+        "name": "Saturday Trial",
+        "path": "/e/saturday-trial-2026-10-17",
+        "shareMessage": "",
+        "slotCount": 9,
+        "slug": "saturday-trial-2026-10-17",
+        "startUtc": "2026-10-17T08:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      },
+      {
+        "archived": false,
+        "bookedCount": 4,
+        "bookings": {
+          "closesAt": "2026-10-20T17:00:00Z",
+          "open": true
+        },
+        "costPence": 800,
+        "details": "Floodlit ring. Wear sensible shoes.",
+        "endUtc": "2026-10-20T19:00:00Z",
+        "full": false,
+        "listed": true,
+        "name": "Evening Run",
+        "path": "/e/evening-run-2026-10-20",
+        "shareMessage": "",
+        "slotCount": 5,
+        "slug": "evening-run-2026-10-20",
+        "startUtc": "2026-10-20T17:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      },
+      {
+        "archived": false,
+        "bookedCount": 1,
+        "bookings": {
+          "closesAt": "2026-11-07T13:00:00Z",
+          "open": true
+        },
+        "costPence": 500,
+        "details": "Members only. Ring hire by the half hour.",
+        "endUtc": "2026-11-07T15:00:00Z",
+        "full": false,
+        "listed": false,
+        "name": "Members' Ring Time",
+        "path": "/e/members-ring-time-2026-11-07",
+        "shareMessage": "Members only: {event} on {date}, {start}–{end}. {link}",
+        "slotCount": 4,
+        "slug": "members-ring-time-2026-11-07",
+        "startUtc": "2026-11-07T13:00:00Z",
+        "venuePostcode": "EF3 4GH"
+      }
+    ],
+    "past": [
+      {
+        "archived": false,
+        "bookedCount": 3,
+        "endUtc": "2026-09-12T11:00:00Z",
+        "listed": true,
+        "name": "Summer Agility Day",
+        "slug": "summer-agility-day-2026-09-12",
+        "startUtc": "2026-09-12T08:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      }
+    ],
+    "pastHasMore": false
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

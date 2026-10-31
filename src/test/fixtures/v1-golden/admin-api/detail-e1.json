@@ -1,0 +1,109 @@
+{
+  "body": {
+    "defaultShareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+    "event": {
+      "archived": false,
+      "breaks": [
+        {
+          "end": "10:45",
+          "endUtc": "2026-10-17T09:45:00Z",
+          "label": "Tea",
+          "start": "10:30",
+          "startUtc": "2026-10-17T09:30:00Z"
+        }
+      ],
+      "costPence": 1250,
+      "date": "2026-10-17",
+      "details": "Bring water for your dog.\nPark in the top field.\n\nGates open at 08:30.",
+      "end": "15:00",
+      "endUtc": "2026-10-17T14:00:00Z",
+      "gapMinutes": 5,
+      "listed": true,
+      "name": "Saturday Trial",
+      "sessionMinutes": 30,
+      "shareMessage": "",
+      "slug": "saturday-trial-2026-10-17",
+      "start": "09:00",
+      "startUtc": "2026-10-17T08:00:00Z",
+      "venuePostcode": "AB1 2CD"
+    },
+    "lineup": "Hillside Agility Club\nSaturday Trial\nSaturday 17 October 2026 · AB1 2CD\n\n09:00 — Rex 🐶 — Sam Smith\n09:35 — Zoë — Ann Lee\n10:30–10:45 — Tea\n10:45 — Biscuit — Pat O'Brien\n11:20 — free\n11:55 — =Max — +Dave Kerr\n12:30 — free\n13:05 — Sir Barksalot the Third of Hillside, Defender of the Agility Ring and Every Tunn — Lou Brown\n13:40 — free\n14:15 — ZOË — Mia Jones",
+    "orphans": [],
+    "slots": [
+      {
+        "booking": {
+          "dogName": "Rex 🐶",
+          "handlerName": "Sam Smith",
+          "id": 1
+        },
+        "end": "2026-10-17T08:30:00Z",
+        "start": "2026-10-17T08:00:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Zoë",
+          "handlerName": "Ann Lee",
+          "id": 2
+        },
+        "end": "2026-10-17T09:05:00Z",
+        "start": "2026-10-17T08:35:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Biscuit",
+          "handlerName": "Pat O'Brien",
+          "id": 3
+        },
+        "end": "2026-10-17T10:15:00Z",
+        "start": "2026-10-17T09:45:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-10-17T10:50:00Z",
+        "start": "2026-10-17T10:20:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "=Max",
+          "handlerName": "+Dave Kerr",
+          "id": 4
+        },
+        "end": "2026-10-17T11:25:00Z",
+        "start": "2026-10-17T10:55:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-10-17T12:00:00Z",
+        "start": "2026-10-17T11:30:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Sir Barksalot the Third of Hillside, Defender of the Agility Ring and Every Tunn",
+          "handlerName": "Lou Brown",
+          "id": 5
+        },
+        "end": "2026-10-17T12:35:00Z",
+        "start": "2026-10-17T12:05:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-10-17T13:10:00Z",
+        "start": "2026-10-17T12:40:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "ZOË",
+          "handlerName": "Mia Jones",
+          "id": 6
+        },
+        "end": "2026-10-17T13:45:00Z",
+        "start": "2026-10-17T13:15:00Z"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

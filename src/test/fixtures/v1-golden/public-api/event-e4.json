@@ -1,0 +1,46 @@
+{
+  "body": {
+    "bookings": {
+      "closesAt": "2026-11-07T13:00:00Z",
+      "open": true
+    },
+    "event": {
+      "archived": false,
+      "costPence": 500,
+      "details": "Members only. Ring hire by the half hour.",
+      "endUtc": "2026-11-07T15:00:00Z",
+      "name": "Members' Ring Time",
+      "slug": "members-ring-time-2026-11-07",
+      "startUtc": "2026-11-07T13:00:00Z",
+      "venuePostcode": "EF3 4GH"
+    },
+    "privacyNotice": "We store your name, your dog's name and the slot you choose so the club can run the event. The club's organisers can see these details; other people using this page only see which slots are taken. The organisers may share the running order, with names, with other participants (for example in a group chat). The details are kept until an organiser deletes the event; nothing is deleted automatically.",
+    "slots": [
+      {
+        "end": "2026-11-07T13:30:00Z",
+        "start": "2026-11-07T13:00:00Z",
+        "status": "free"
+      },
+      {
+        "end": "2026-11-07T14:00:00Z",
+        "start": "2026-11-07T13:30:00Z",
+        "status": "free"
+      },
+      {
+        "end": "2026-11-07T14:30:00Z",
+        "start": "2026-11-07T14:00:00Z",
+        "status": "taken"
+      },
+      {
+        "end": "2026-11-07T15:00:00Z",
+        "start": "2026-11-07T14:30:00Z",
+        "status": "free"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

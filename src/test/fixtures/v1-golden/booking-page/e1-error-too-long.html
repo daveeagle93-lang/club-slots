@@ -1,0 +1,68 @@
+<header class="site-header">
+<a href="/">Hillside Agility Club</a>
+</header>
+<main id="app">
+<header class="event">
+<h1>Saturday Trial</h1>
+<dl class="facts">
+<dt>Date</dt>
+<dd>Saturday 17 October 2026</dd>
+<dt>Time</dt>
+<dd>09:00–15:00</dd>
+<dt>Venue</dt>
+<dd>
+<a href="https://www.google.com/maps/search/?api=1&amp;query=AB1%202CD" target="_blank" rel="noopener noreferrer">AB1 2CD</a>
+</dd>
+<dt>Cost</dt>
+<dd>£12.50</dd>
+</dl>
+<p class="details">Bring water for your dog.
+Park in the top field.
+
+Gates open at 08:30.</p>
+</header>
+<section class="slots" aria-labelledby="slots-heading">
+<h2 id="slots-heading">Pick a time</h2>
+<p class="slots-left">3 slots left</p>
+<div id="notice" class="notice" role="alert" tabindex="-1" hidden="">
+</div>
+<ul class="slot-grid">
+<li>
+<button type="button" class="slot" aria-pressed="true" aria-label="Book 11:20 slot" data-start="2026-10-17T10:20:00Z">11:20</button>
+</li>
+<li>
+<button type="button" class="slot" aria-pressed="false" aria-label="Book 12:30 slot" data-start="2026-10-17T11:30:00Z">12:30</button>
+</li>
+<li>
+<button type="button" class="slot" aria-pressed="false" aria-label="Book 13:40 slot" data-start="2026-10-17T12:40:00Z">13:40</button>
+</li>
+</ul>
+</section>
+<form id="booking-form" aria-busy="false">
+<h2 tabindex="-1">Booking 11:20</h2>
+<div class="form-error" role="alert">
+</div>
+<div class="field">
+<label for="dog-name">Dog's name</label>
+<input id="dog-name" name="dog" type="text" required="" maxlength="80" autocapitalize="words" autocomplete="off" enterkeyhint="next" aria-describedby="dog-error">
+<p id="dog-error" class="field-error" role="alert">
+</p>
+</div>
+<div class="field">
+<label for="handler-name">Handler's name</label>
+<input id="handler-name" name="handler" type="text" required="" maxlength="80" autocapitalize="words" autocomplete="name" enterkeyhint="done" aria-describedby="handler-error" aria-invalid="true">
+<p id="handler-error" class="field-error" role="alert">The handler's name must be at most 80 characters.</p>
+</div>
+<section class="privacy" aria-labelledby="privacy-heading">
+<h3 id="privacy-heading">Privacy</h3>
+<p>We store your name, your dog's name and the slot you choose so the club can run the event. The club's organisers can see these details; other people using this page only see which slots are taken. The organisers may share the running order, with names, with other participants (for example in a group chat). The details are kept until an organiser deletes the event; nothing is deleted automatically.</p>
+<p>Questions about your details, or want them deleted? Contact Jo Bennett, <a href="mailto:privacy@hillside-agility.example">privacy@hillside-agility.example</a>.</p>
+</section>
+<button type="submit" class="button primary">Confirm booking for 11:20</button>
+<p class="progress" aria-live="polite">
+</p>
+</form>
+</main>
+<footer class="site-footer">
+<a href="https://hillside-agility.example/" target="_blank" rel="noopener noreferrer">hillside-agility.example</a>
+</footer>

@@ -1,0 +1,85 @@
+{
+  "body": {
+    "defaultShareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+    "event": {
+      "archived": true,
+      "breaks": [],
+      "costPence": 0,
+      "date": "2026-12-05",
+      "details": "Fancy dress welcome.",
+      "end": "13:00",
+      "endUtc": "2026-12-05T13:00:00Z",
+      "gapMinutes": 0,
+      "listed": true,
+      "name": "Winter Fun Day",
+      "sessionMinutes": 20,
+      "shareMessage": "",
+      "slug": "winter-fun-day-2026-12-05",
+      "start": "10:00",
+      "startUtc": "2026-12-05T10:00:00Z",
+      "venuePostcode": "AB1 2CD"
+    },
+    "lineup": "Hillside Agility Club\nWinter Fun Day\nSaturday 5 December 2026 · AB1 2CD\n\n10:00 — Frost — Ivy Moon\n10:20 — Holly — Jon Reed\n10:40 — free\n11:00 — free\n11:20 — free\n11:40 — free\n12:00 — free\n12:20 — free\n12:40 — free",
+    "orphans": [],
+    "slots": [
+      {
+        "booking": {
+          "dogName": "Frost",
+          "handlerName": "Ivy Moon",
+          "id": 11
+        },
+        "end": "2026-12-05T10:20:00Z",
+        "start": "2026-12-05T10:00:00Z"
+      },
+      {
+        "booking": {
+          "dogName": "Holly",
+          "handlerName": "Jon Reed",
+          "id": 12
+        },
+        "end": "2026-12-05T10:40:00Z",
+        "start": "2026-12-05T10:20:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-12-05T11:00:00Z",
+        "start": "2026-12-05T10:40:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-12-05T11:20:00Z",
+        "start": "2026-12-05T11:00:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-12-05T11:40:00Z",
+        "start": "2026-12-05T11:20:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-12-05T12:00:00Z",
+        "start": "2026-12-05T11:40:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-12-05T12:20:00Z",
+        "start": "2026-12-05T12:00:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-12-05T12:40:00Z",
+        "start": "2026-12-05T12:20:00Z"
+      },
+      {
+        "booking": null,
+        "end": "2026-12-05T13:00:00Z",
+        "start": "2026-12-05T12:40:00Z"
+      }
+    ]
+  },
+  "headers": {
+    "cache-control": "no-store",
+    "content-type": "application/json"
+  },
+  "status": 200
+}

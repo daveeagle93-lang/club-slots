@@ -1,0 +1,253 @@
+{
+  "1 cost change only, the orphan is affected: bookings_affected": {
+    "body": {
+      "affected": [
+        {
+          "dogName": "Lost Tag",
+          "handlerName": "Ed Cole",
+          "id": 10,
+          "slotStart": "2026-10-20T15:30:00Z"
+        }
+      ],
+      "error": {
+        "code": "bookings_affected",
+        "message": "Some bookings are on slots this change would remove. Check the list and confirm to remove them."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  "2 end moved to 19:00, no confirmation: bookings_affected lists the orphan and the 18:30 booking": {
+    "body": {
+      "affected": [
+        {
+          "dogName": "Lost Tag",
+          "handlerName": "Ed Cole",
+          "id": 10,
+          "slotStart": "2026-10-20T15:30:00Z"
+        },
+        {
+          "dogName": "Ruby",
+          "handlerName": "Ollie Hart",
+          "id": 9,
+          "slotStart": "2026-10-20T18:30:00Z"
+        }
+      ],
+      "error": {
+        "code": "bookings_affected",
+        "message": "Some bookings are on slots this change would remove. Check the list and confirm to remove them."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  "3 only the orphan confirmed: bookings_affected again": {
+    "body": {
+      "affected": [
+        {
+          "dogName": "Lost Tag",
+          "handlerName": "Ed Cole",
+          "id": 10,
+          "slotStart": "2026-10-20T15:30:00Z"
+        },
+        {
+          "dogName": "Ruby",
+          "handlerName": "Ollie Hart",
+          "id": 9,
+          "slotStart": "2026-10-20T18:30:00Z"
+        }
+      ],
+      "error": {
+        "code": "bookings_affected",
+        "message": "Some bookings are on slots this change would remove. Check the list and confirm to remove them."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 409
+  },
+  "4 removeBookingIds invalid: invalid_input": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "removeBookingIds": "Send at most 500 booking ids, each a positive whole number."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "5 both confirmed: saved, with removed bookings": {
+    "body": {
+      "event": {
+        "archived": false,
+        "breaks": [],
+        "costPence": 800,
+        "date": "2026-10-20",
+        "details": "Floodlit ring. Wear sensible shoes.",
+        "end": "19:00",
+        "endUtc": "2026-10-20T18:00:00Z",
+        "gapMinutes": 0,
+        "listed": true,
+        "name": "Evening Run",
+        "sessionMinutes": 20,
+        "shareMessage": "",
+        "slug": "evening-run-2026-10-20",
+        "start": "18:00",
+        "startUtc": "2026-10-20T17:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      },
+      "removed": [
+        {
+          "dogName": "Lost Tag",
+          "handlerName": "Ed Cole",
+          "id": 10,
+          "slotStart": "2026-10-20T15:30:00Z"
+        },
+        {
+          "dogName": "Ruby",
+          "handlerName": "Ollie Hart",
+          "id": 9,
+          "slotStart": "2026-10-20T18:30:00Z"
+        }
+      ],
+      "slotCount": 3
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  "6 same save again: saved, nothing left to remove": {
+    "body": {
+      "event": {
+        "archived": false,
+        "breaks": [],
+        "costPence": 800,
+        "date": "2026-10-20",
+        "details": "Floodlit ring. Wear sensible shoes.",
+        "end": "19:00",
+        "endUtc": "2026-10-20T18:00:00Z",
+        "gapMinutes": 0,
+        "listed": true,
+        "name": "Evening Run",
+        "sessionMinutes": 20,
+        "shareMessage": "",
+        "slug": "evening-run-2026-10-20",
+        "start": "18:00",
+        "startUtc": "2026-10-20T17:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      },
+      "removed": [],
+      "slotCount": 3
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  "7 detail after the edit": {
+    "body": {
+      "defaultShareMessage": "{club}\n{event}\n{date}, {start}–{end}\nVenue: {postcode}\n{details}\nBook your place: {link}",
+      "event": {
+        "archived": false,
+        "breaks": [],
+        "costPence": 800,
+        "date": "2026-10-20",
+        "details": "Floodlit ring. Wear sensible shoes.",
+        "end": "19:00",
+        "endUtc": "2026-10-20T18:00:00Z",
+        "gapMinutes": 0,
+        "listed": true,
+        "name": "Evening Run",
+        "sessionMinutes": 20,
+        "shareMessage": "",
+        "slug": "evening-run-2026-10-20",
+        "start": "18:00",
+        "startUtc": "2026-10-20T17:00:00Z",
+        "venuePostcode": "AB1 2CD"
+      },
+      "lineup": "Hillside Agility Club\nEvening Run\nTuesday 20 October 2026 · AB1 2CD\n\n18:00 — Moss — Gwen Davies\n18:20 — Nell — Al Penn\n18:40 — Skye — Tariq Ali",
+      "orphans": [],
+      "slots": [
+        {
+          "booking": {
+            "dogName": "Moss",
+            "handlerName": "Gwen Davies",
+            "id": 7
+          },
+          "end": "2026-10-20T17:20:00Z",
+          "start": "2026-10-20T17:00:00Z"
+        },
+        {
+          "booking": {
+            "dogName": "Nell",
+            "handlerName": "Al Penn",
+            "id": 17
+          },
+          "end": "2026-10-20T17:40:00Z",
+          "start": "2026-10-20T17:20:00Z"
+        },
+        {
+          "booking": {
+            "dogName": "Skye",
+            "handlerName": "Tariq Ali",
+            "id": 8
+          },
+          "end": "2026-10-20T18:00:00Z",
+          "start": "2026-10-20T17:40:00Z"
+        }
+      ]
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 200
+  },
+  "8 invalid_input (end before start)": {
+    "body": {
+      "error": {
+        "code": "invalid_input",
+        "message": "Check the highlighted fields."
+      },
+      "fields": {
+        "breaks.0.end": "The break must end within the event.",
+        "end": "The end must be after the start."
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 400
+  },
+  "9 404 unknown event": {
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Event not found"
+      }
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json"
+    },
+    "status": 404
+  }
+}

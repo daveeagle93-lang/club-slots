@@ -1,0 +1,194 @@
+{
+  "e1-error-both-empty": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/events/saturday-trial-2026-10-17"
+      },
+      {
+        "body": {
+          "dogName": "",
+          "handlerName": "",
+          "idempotencyKey": "<key>",
+          "slot": "2026-10-17T10:20:00Z"
+        },
+        "method": "POST",
+        "url": "/api/events/saturday-trial-2026-10-17/bookings"
+      }
+    ],
+    "title": "Saturday Trial – Hillside Agility Club"
+  },
+  "e1-error-empty-dog": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/events/saturday-trial-2026-10-17"
+      },
+      {
+        "body": {
+          "dogName": "",
+          "handlerName": "Ann Lee",
+          "idempotencyKey": "<key>",
+          "slot": "2026-10-17T10:20:00Z"
+        },
+        "method": "POST",
+        "url": "/api/events/saturday-trial-2026-10-17/bookings"
+      }
+    ],
+    "title": "Saturday Trial – Hillside Agility Club"
+  },
+  "e1-error-empty-handler": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/events/saturday-trial-2026-10-17"
+      },
+      {
+        "body": {
+          "dogName": "Willow",
+          "handlerName": "",
+          "idempotencyKey": "<key>",
+          "slot": "2026-10-17T10:20:00Z"
+        },
+        "method": "POST",
+        "url": "/api/events/saturday-trial-2026-10-17/bookings"
+      }
+    ],
+    "title": "Saturday Trial – Hillside Agility Club"
+  },
+  "e1-error-invisible-character": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/events/saturday-trial-2026-10-17"
+      },
+      {
+        "body": {
+          "dogName": "Re​x",
+          "handlerName": "Ann Lee",
+          "idempotencyKey": "<key>",
+          "slot": "2026-10-17T10:20:00Z"
+        },
+        "method": "POST",
+        "url": "/api/events/saturday-trial-2026-10-17/bookings"
+      }
+    ],
+    "title": "Saturday Trial – Hillside Agility Club"
+  },
+  "e1-error-no-letter-or-number": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/events/saturday-trial-2026-10-17"
+      },
+      {
+        "body": {
+          "dogName": "🐶🐶",
+          "handlerName": "Ann Lee",
+          "idempotencyKey": "<key>",
+          "slot": "2026-10-17T10:20:00Z"
+        },
+        "method": "POST",
+        "url": "/api/events/saturday-trial-2026-10-17/bookings"
+      }
+    ],
+    "title": "Saturday Trial – Hillside Agility Club"
+  },
+  "e1-error-too-long": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/events/saturday-trial-2026-10-17"
+      },
+      {
+        "body": {
+          "dogName": "Willow",
+          "handlerName": "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
+          "idempotencyKey": "<key>",
+          "slot": "2026-10-17T10:20:00Z"
+        },
+        "method": "POST",
+        "url": "/api/events/saturday-trial-2026-10-17/bookings"
+      }
+    ],
+    "title": "Saturday Trial – Hillside Agility Club"
+  },
+  "e1-open": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/events/saturday-trial-2026-10-17"
+      }
+    ],
+    "title": "Saturday Trial – Hillside Agility Club"
+  },
+  "e1-slot-selected": {
+    "title": "Saturday Trial – Hillside Agility Club"
+  },
+  "e3-archived": {
+    "title": "Winter Fun Day – Hillside Agility Club"
+  },
+  "e4-started-slots": {
+    "calls": [
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/settings"
+      },
+      {
+        "body": null,
+        "method": "GET",
+        "url": "/api/events/members-ring-time-2026-11-07"
+      }
+    ],
+    "title": "Members' Ring Time – Hillside Agility Club"
+  },
+  "e5-closed": {
+    "title": "Summer Agility Day – Hillside Agility Club"
+  },
+  "unknown-event": {
+    "title": "Book a slot – Hillside Agility Club"
+  }
+}
