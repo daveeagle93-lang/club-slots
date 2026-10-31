@@ -29,6 +29,10 @@ The Deploy to Cloudflare form no longer asks for any secret or variable. An orga
 - `worker-configuration.d.ts` regenerated, and a test updated to be date-independent.
 - Docs: README, deploying, admin-auth, sign-in, handover, known-limits and the design and plan docs updated.
 
+### Fixed
+
+- Saved theme colours seemed to revert to the default blue. The colours were stored correctly, but the browser kept serving its cached copy of `/api/theme.css` (for the minute after the change, and then once more because of `stale-while-revalidate`) on every page except the Settings page itself. The stylesheet now has `Cache-Control: public, max-age=60` with no `stale-while-revalidate`, and the Settings page replaces the browser's cached copy after a save or reset. Checked in Chromium only.
+
 ### Upgrading from v1.1
 
 This is a summary. The full steps are in [docs/deploying.md](docs/deploying.md#upgrading-from-v11).
