@@ -22,6 +22,11 @@ const SHAPE = new RegExp(
   "@media \\(prefers-color-scheme:dark\\)\\{:root\\{--primary:#[0-9a-f]{6};--on-primary:#[0-9a-f]{6};--accent:#[0-9a-f]{6}\\}\\}\\n$",
 );
 
+// A saved colour change reaches other browsers within max-age, as the route's comment promises. Any stale-while-revalidate
+// would let a browser serve the old colours for that long again after max-age (a real Chromium did, in a reproduction), so
+// there is none.
+const CACHE_CONTROL = "public, max-age=60";
+
 const DEFAULT_CSS =
   ":root{--primary:#0b5cad;--on-primary:#ffffff;--accent:#0b5cad}@media (prefers-color-scheme:dark){:root{--primary:#236cb5;--on-primary:#ffffff;--accent:#4f8ac4}}\n";
 const GREEN_CSS =
@@ -50,7 +55,7 @@ describe("GET /api/theme.css", () => {
     expect(res.headers.get("content-type")).toBe("text/css; charset=utf-8");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("x-robots-tag")).toBe("noindex");
-    expect(res.headers.get("cache-control")).toBe("public, max-age=60, stale-while-revalidate=300");
+    expect(res.headers.get("cache-control")).toBe(CACHE_CONTROL);
   });
 
   it("has a strong ETag that is the SHA-256 of the body", async () => {
@@ -87,7 +92,7 @@ describe("GET /api/theme.css", () => {
         expect(res.status, header).toBe(304);
         expect(await res.text()).toBe("");
         expect(res.headers.get("etag")).toBe(etag);
-        expect(res.headers.get("cache-control")).toBe("public, max-age=60, stale-while-revalidate=300");
+        expect(res.headers.get("cache-control")).toBe(CACHE_CONTROL);
         expect(res.headers.get("x-content-type-options")).toBe("nosniff");
       }
     });
@@ -131,7 +136,7 @@ describe("GET /api/theme.css", () => {
       const res = await request();
       expect(res.status).toBe(200);
       expect(await res.text()).toBe(DEFAULT_CSS);
-      expect(res.headers.get("cache-control")).toBe("public, max-age=60, stale-while-revalidate=300");
+      expect(res.headers.get("cache-control")).toBe(CACHE_CONTROL);
     });
 
     it("falls back to the default when the CHECK was bypassed with CSS", async () => {

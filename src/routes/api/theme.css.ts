@@ -30,8 +30,10 @@ export const onRequest: RouteHandler = async ({ request, env }) => {
   }
   const etag = `"${hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(css)))}"`;
   const h = headers();
-  // A minute is the longest a saved colour change can lag. The admin page adds ?v= after saving, so it sees its own change at once.
-  h.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  // A minute is the longest a saved colour change can lag, so no stale-while-revalidate: it would let a browser serve the old
+  // colours once more for up to five minutes after max-age. The admin page adds ?v= after saving and refreshes the browser's
+  // copy of this address (public/admin/settings.js), so the admin sees their own change at once.
+  h.set("Cache-Control", "public, max-age=60");
   h.set("ETag", etag);
   const condition = request.headers.get("If-None-Match");
   if (condition !== null && matches(condition, etag)) return new Response(null, { status: 304, headers: h });

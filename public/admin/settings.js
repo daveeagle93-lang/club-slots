@@ -511,6 +511,9 @@ export async function init({ document, fetch, navigate, image, now = Date.now })
 
     const restyle = () => {
       document.querySelector('link[rel="stylesheet"][href^="/api/theme.css"]')?.setAttribute("href", `/api/theme.css?v=${now()}`);
+      // Every other page, and the next reload of this one, link the plain address, which the browser may still hold with the
+      // old colours for up to a minute. A "reload" fetch replaces that cached copy now. Best effort: the save already worked.
+      fetch("/api/theme.css", { cache: "reload" }).catch(() => {});
     };
     const showErrors = (messages) => {
       for (const p of [primary, accent]) {

@@ -21,7 +21,7 @@ const SETTINGS = {
   icons: { background: "#0b5cad", logoSha256: SHA },
 };
 
-type Call = { method: string; url: string; headers?: Record<string, string>; body?: any };
+type Call = { method: string; url: string; headers?: Record<string, string>; body?: any; cache?: string };
 type Handler = (call: Call) => Response | Promise<Response>;
 
 /** The fake browser pieces: every picture "decodes" to 1000 x 500 and exports as 4 KiB of WebP. */
@@ -49,7 +49,7 @@ async function start(handlers: Record<string, Handler> = {}, { settings = SETTIN
   const image = fakeImage();
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const call: Call = {
-      method: init?.method ?? "GET", url, headers: init?.headers as Record<string, string>,
+      method: init?.method ?? "GET", url, headers: init?.headers as Record<string, string>, cache: init?.cache,
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     };
     calls.push(call);
@@ -60,6 +60,7 @@ async function start(handlers: Record<string, Handler> = {}, { settings = SETTIN
     if (call.method === "GET" && url.startsWith("/api/logo?v=")) return { ...reply(200), blob: async () => new Blob([new Uint8Array(10)], { type: "image/webp" }) } as unknown as Response;
     if (call.method === "PUT" && url.startsWith("/api/admin/settings/icons/")) return reply(200, { icon: {} });
     if (call.method === "GET" && url === "/api/admin/settings") return reply(200, settings);
+    if (call.method === "GET" && url === "/api/theme.css") return reply(200);
     throw new Error(`unexpected ${call.method} ${url}`);
   });
   await init({ document, fetch: fetch as never, navigate, image: image as never, now: () => 12345 });
@@ -609,6 +610,33 @@ describe("colours", () => {
     expect($("#theme .form-status").textContent).toBe("Colours saved.");
     expect(document.querySelector('link[rel=stylesheet]')!.getAttribute("href")).toBe("/api/theme.css?v=12345");
     expect(document.activeElement).toBe(button("Save colours"));
+  });
+
+  // Only the page's own <link> gets ?v=, so the browser keeps a cached copy of the plain address that other pages and the next
+  // reload use. Without this refresh that copy keeps the old colours for up to max-age: it looks as if the save was lost.
+  it("also refreshes the browser's cached copy of the plain stylesheet address after a save", async () => {
+    const { calls } = await start({ "PUT /api/admin/settings/theme": () => reply(200, { theme: { primary: "#1b6b3a", accent: "#1b6b3a", isDefault: false } }) });
+    swatchOf("Forest").click();
+    submit("theme");
+    await flush();
+    expect(calls.filter((c) => c.url === "/api/theme.css")).toEqual([expect.objectContaining({ method: "GET", cache: "reload" })]);
+  });
+
+  it("also refreshes the browser's cached copy of the plain stylesheet address after a reset", async () => {
+    const { calls } = await start(
+      { "DELETE /api/admin/settings/theme": () => reply(200, { theme: { default: DEFAULT_THEME, isDefault: true } }) },
+      { settings: { ...SETTINGS, theme: { primary: "#1b6b3a", accent: "#a1235f", isDefault: false } } },
+    );
+    button("Reset to default colours").click();
+    await flush();
+    expect(calls.filter((c) => c.url === "/api/theme.css")).toEqual([expect.objectContaining({ method: "GET", cache: "reload" })]);
+  });
+
+  it("does not refresh the stylesheet when the save is refused", async () => {
+    const { calls } = await start({ "PUT /api/admin/settings/theme": () => reply(400, { error: { code: "invalid_input", message: "x" }, fields: { accent: "Not a colour." } }) });
+    submit("theme");
+    await flush();
+    expect(calls.filter((c) => c.url === "/api/theme.css")).toEqual([]);
   });
 
   it("blocks a double submit while saving", async () => {
