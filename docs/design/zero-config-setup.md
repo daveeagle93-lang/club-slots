@@ -1,6 +1,6 @@
 # Zero-config setup: a first-run claim window instead of `SETUP_CODE`
 
-Status: **approved 21 October 2026, including the recovery code added in section 3.6 (C7, C8). The code is written on branch docs/zero-config-setup; the post-implementation Deploy run (section 8.2) is still to do. The Deploy button probe P1 was run on 22 October 2026 and passed (section 8); three design changes that followed from it are in section 3.7.** Written 21 October 2026 against `main` = `v1.1` (commit `f71189f`, migrations `0001` to `0018`).
+Status: **approved 21 October 2026, including the recovery code added in section 3.6 (C7, C8). The code is written on branch docs/zero-config-setup; the post-implementation Deploy run (section 8.2) was done on 31 October 2026 and covered only part of the steps (section 8.3). The Deploy button probe P1 was run on 22 October 2026 and passed (section 8); three design changes that followed from it are in section 3.7.** Written 21 October 2026 against `main` = `v1.1` (commit `f71189f`, migrations `0001` to `0018`).
 
 Goal: a non-technical organiser presses the Deploy button, accepts every default, deploys, opens their site and saves a password. The password sign-in stays the default. Cloudflare Access stays optional.
 
@@ -175,7 +175,7 @@ C3 in this table: a set `SETUP_CODE` wins, so the strict behaviour is one Worker
 - **Cost, and how 3.8 removes it.** With only a code default, a site on Access whose `ADMIN_AUTH=access` line is lost would silently fall back to the password sign-in, and an admin secret made before the switch (still in D1, `docs/admin-auth.md:171`) would be accepted. 3.8 stores the mode in D1 and pins an env-configured Access site there the first time an admin signs in through it, so the lost line no longer changes anything. A site that has never had an admin sign in through Access is not pinned; for it the downgrade is still possible, and the docs say so.
 - **Existing deployments.** Anyone on Access has `ADMIN_AUTH=access` in their own copy of `wrangler.jsonc` (that is how `docs/deploying.md:172` told them to do it). Updating from the template then conflicts on the `vars` line; "Updating your copy" must say: keep your `vars`, nothing else changes. Everyone on password mode can delete the line or keep it; both work.
 - `configure` (`scripts/configure-core.ts`): `buildConfig` must create `vars` when a club's `account.local.json` supplies some, because the template no longer has any. I have not read that code, so how much of `src/test/configure.test.ts` changes is **unknown**; see section 7.
-- **Not verified:** that removing `vars` removes the field from the form. It follows from "plain vars are shown", but only the implemented branch's run can prove it (8.2, step 1).
+- **Not verified:** that removing `vars` removes the field from the form. It follows from "plain vars are shown", but only the implemented branch's run can prove it (8.2, step 1). Observed 31 October 2026 (8.3): the field is gone.
 
 **(b) The window clock.** In the probe, the migrations ran from about 07:22:27 to 07:22:53 and the Worker was live at 07:23:09, **about 16 seconds after the migrations**; the whole deploy took 45 seconds. `0019` stamps `opened_at` while the migrations run, so the window starts about 16 to 40 seconds before the site answers. 30 minutes (C1) is ample for the deploy itself. The real risk to the window is **not finding the address** (next point), not the deploy.
 
@@ -351,6 +351,44 @@ On a fresh database (new Worker and database names, so nothing is reused), accep
 
 Clean-up of anything created is part of each run: the source repo, the copy repo, the Worker and the database. Do not paste any secret into notes; record only that it was shown once.
 
+### 8.3 Run record: 31 October 2026 (partial)
+
+The owner ran 8.2 through the button on their own Cloudflare account, accepting the defaults. Cloudflare suffixed the names: Worker and copy repository `sb-probe-zc1`, database `sb-probe-zc-db`. Times are as the owner reported them; the timezone was not stated. This is the owner's report; I did not see the run. Both secrets were saved by the owner; they are not recorded here, only that they were shown once.
+
+| 8.2 step | Result |
+|---|---|
+| 1. Form has no `ADMIN_AUTH` field and no secret field | **PASS.** |
+| 2. `/` redirects to the claim page | **PASS.** |
+| 2. `/setup` GET does not claim | Not reported. |
+| 2. One press shows the secret and the recovery code on one screen | **PASS.** Both were on one screen, shown once. |
+| 3. A second browser is refused ("already set up") | Partly seen. In a private window `/` showed the public events page, which is correct. `/admin` and `/setup` in the second browser: not reported. |
+| 3. The first browser can ask for a replacement before signing in | Not reported. |
+| 4. Sign-in works | **PASS.** |
+| 4. `/setup` is then 404 (and `/api/admin/session`) | Not reported. |
+| 5. `/recover`: wrong code refused; right code gives a new secret and code | Not reported. |
+| 6. Window expiry and reopen | Not reported. |
+| 7. A push to the copy repo redeploys without reopening the window | Not reported. |
+| 8. Menu names for the address; the form's switches | Recorded below. |
+
+Build: 55 seconds. Migrations `0001` to `0019` all applied (`0019` finished at 16:45:13) and the Worker was live at 16:45:27, 14 seconds later. Bindings: `DB` and `ASSETS` only, so no `ADMIN_AUTH` variable.
+
+Other findings:
+
+- **An "Enable Preview builds" switch was shown, ON by default** (Preview command `npx wrangler preview`); the owner switched it off by hand. On 22 October 2026 no such switch was seen (2.1). My research on 31 October 2026:
+  - `wrangler.jsonc` already has `"preview_urls": false` and the switch was still ON, so that key does not control it. `preview_urls` is documented as the Version URLs setting ([Cloudflare: preview URLs configuration](https://developers.cloudflare.com/workers/configuration/previews/)).
+  - Cloudflare's [build branches](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/) page puts "Enable Preview Builds" under Settings > Build > Branch control in the dashboard and documents no config-file, API or Deploy-button way to set it.
+  - The [build configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) page says the Preview command "Defaults to `npx wrangler preview`" and that preview builds run for branches that are not the production branch.
+  - The [Deploy buttons](https://developers.cloudflare.com/workers/platform/deploy-buttons/) page says nothing on preview or branch control; the template influences the build and deploy commands only through the `build` and `deploy` scripts in `package.json`.
+  - The [Previews](https://developers.cloudflare.com/workers/previews/) page says Preview URLs are public by default and that "Previews do not inherit production settings".
+  - I found no documented config way to default Preview builds off. I did not test a `previews` block (Wrangler 4.147 has one in its schema; its effect is **unverified**). A preview build only runs when a non-production branch is pushed to the club's copy, which the template never does.
+- **Description placement.** The sentence "Your club's booking database…" (from `package.json`, `cloudflare.bindings.DB.description`) showed under **Project name**, not next to the D1 fields.
+- **Finding the address.** It was in the build log, or in the dashboard at Workers & Pages, the Worker, **Domains** section, **Worker URL** (the owner's wording). On that page the Production and Preview toggles both showed as OFF, yet the site works. The docs now say to leave them alone.
+- **Names.** Cloudflare suffixed the Worker, repository and database names (above); no `sb-probe-zc-db-preview` database existed.
+
+Decision and follow-up: `README.md` and `docs/deploying.md` are updated from this run. Because I found no config fix for the Preview builds switch, they tell the user to switch it off. Still to run: step 3 (`/admin` and `/setup` in the second browser, and the replacement by the first browser), step 4 (`/setup` 404 and `/api/admin/session`), step 5 (`/recover`), step 6 (expiry) and step 7 (redeploy on push).
+
+Clean-up, 31 October 2026: the Worker `sb-probe-zc1` and the database `sb-probe-zc-db` were deleted. The two probe GitHub repositories are for the owner to delete.
+
 ## 9. Decisions (approved 21 and 22 October 2026)
 
 1. **N = 30 minutes** (C1). Approved.
@@ -366,7 +404,7 @@ Clean-up of anything created is part of each run: the source repo, the copy repo
 ## 10. What I did not verify
 
 - Section 2 rows still marked **Unverified**: prefilled or optional secrets and a blank live line (not tested: no secret field existed in P1; P0 was not run). "Commented lines are ignored" and "zero live lines works" are **observed once** (P1), not documented.
-- That removing `vars` removes the `ADMIN_AUTH` field from the form (3.7 (a)); the dashboard menu names in 3.7 (c).
+- That removing `vars` removes the `ADMIN_AUTH` field from the form (3.7 (a)): **observed 31 October 2026** (8.3), the form had no such field. The dashboard menu names in 3.7 (c) are now partly checked: the owner found the address under the Worker's **Domains** section, labelled **Worker URL** (8.3). Not checked: the path on a brand-new account's first visit (for example choosing a `workers.dev` subdomain).
 - How `buildConfig` (`scripts/configure-core.ts`) copes with a template that has no `vars`.
 - Whether the `workers.dev` account subdomain can be enumerated (section 4).
 - Whether a tag or branch can be named in the button URL.

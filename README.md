@@ -21,9 +21,11 @@ Press the button and sign in to Cloudflare (a free account is enough). Cloudflar
 2. **Project name.** The suggested name is fine. It is also your Worker's name, your copy's repository name and part of your site's address. If your account already has a repository of that name, Cloudflare suggests the same name with `-1` on the end; accept it.
 3. **Database.** Leave **Create new**, and leave the suggested name, location hint and read-replication checkbox as they are.
 4. **Build command** (empty) and **Deploy command** (`npm run deploy`). Leave both.
-5. If Cloudflare shows a switch for Cloudflare Access or for preview builds, leave it off. Neither appeared on 22 October 2026.
+5. Cloudflare shows an **"Enable Preview builds"** switch, **on** by default (seen on 31 October 2026). Switch it **off**: it builds a public preview of any other branch you push to your copy, and this site never needs one. If a switch for Cloudflare Access appears, leave it off (not seen so far).
 
-This is the form as expected after this change; the ADMIN_AUTH field is expected to be gone but has not been seen yet (**unverified**).
+The sentence "Your club's booking database…" may show under **Project name** rather than beside the database fields. Ignore where it sits: there is nothing to fill in.
+
+There is no admin secret or password field on the form (seen on 31 October 2026).
 
 Then press **Deploy**. It takes about a minute.
 
@@ -36,7 +38,7 @@ Cloudflare does not show you your site's address when the deploy ends, so first 
 **Find your site's address.**
 
 1. It is the `https://….workers.dev` line near the end of the build log.
-2. Or, in the Cloudflare dashboard, open **Workers & Pages**, then your Worker (it has the name you gave the project). Its page shows the address. These menu names are **unverified**: they will be checked on the next run.
+2. Or, in the Cloudflare dashboard, open **Workers & Pages**, then your Worker (it has the name you gave the project). In its **Domains** section the address is the **Worker URL** (seen on 31 October 2026). The **Production** and **Preview** toggles next to it can look switched off while the site works: leave them alone.
 
 Open that address, not `/setup`, for your first visit. Then:
 
@@ -100,7 +102,7 @@ Every lane needs a name once there are two or more. The most you can have is 10 
 
 ## Status
 
-Work in progress. The button has been run end to end once against the public copy of this repository (6 October 2026), when it still asked for a setup code: it created the database, ran all the database updates that existed then, deployed the site to `workers.dev`, and `/setup`, sign-in, creating an event and booking all worked. On 22 October 2026 a trial copy of the earlier version with no setup code was deployed through the form (it showed no secret field), which is what the form list above is based on. The first-run page, the recovery code and `/recover` described here have **not** yet been run through the button: that run is still to do. Anything not covered by a real run is marked **unverified** in the guides.
+Work in progress. The button has been run end to end once against the public copy of this repository (6 October 2026), when it still asked for a setup code: it created the database, ran all the database updates that existed then, deployed the site to `workers.dev`, and `/setup`, sign-in, creating an event and booking all worked. On 22 October 2026 a trial copy of the earlier version with no setup code was deployed through the form (it showed no secret field), which is what the form list above is based on. On 31 October 2026 the current version was run through the button: the form had no secret field, the build took 55 seconds and applied all 19 migrations, `/` went to the first-run page, which showed the admin secret and the recovery code once on one screen, and sign-in worked. `/recover`, the window running out, and redeploy on push have not been run yet and remain **unverified**. Anything not covered by a real run is marked **unverified** in the guides.
 
 ## Licence
 
