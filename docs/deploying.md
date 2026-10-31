@@ -210,16 +210,32 @@ npm run seed -- --remote --env preview
 
 The button makes a copy. Changes to the template do **not** flow into it, and Cloudflare's docs describe no way for them to. Two ways to update:
 
-1. **Merge the template into your copy.** In your clone:
+1. **Merge the template into your copy.** In your clone, with your working tree clean:
 
    ```sh
    git remote add template <template-url>
    git fetch template
    git merge template/main
-   git push
    ```
 
-   The migrations run on every deploy (the `deploy` script applies them), so pushing a merge that adds a migration applies it. Expect a conflict on the `database_id` lines of `wrangler.jsonc` if the button or you replaced the placeholders there: keep your own ids. If you added a `vars` block (for Cloudflare Access, say), expect a conflict there too: see "Upgrading from v1.1" below. That conflict is expected from how the button is documented to work; I have not seen it. A push redeploys your Worker automatically: the button's form says "Every push to your production branch will be deployed automatically". Tip: check the Deployments tab on the Worker's page in the dashboard after your first push. To deploy without pushing, run `npm run deploy` from your clone.
+   **A copy made by the button stops here with `fatal: refusing to merge unrelated histories`.** Cloudflare imports your copy as a single commit ("source repo import") that shares no history with the template (seen on 31 October 2026, on the copy `club-slots`; a plain `git merge` was refused). Do the first update like this:
+
+   ```sh
+   git merge template/main --allow-unrelated-histories
+   ```
+
+   Every file that differs between the two sides is reported as a conflict (`add/add`), because git has no common ancestor to compare against; files that are identical merge silently. On that run the conflicts were the six files the template had changed since the copy was made, plus `package.json` and `wrangler.jsonc`. Resolve them so that **the template's version wins everywhere except for your own values**:
+
+   ```sh
+   git checkout --theirs <the files the template changed>
+   git checkout --ours package.json wrangler.jsonc   # only if the template did not change them: see below
+   git add -A
+   git commit
+   ```
+
+   The three values that are yours are the `name` in `package.json`, the `name` in `wrangler.jsonc`, and the `database_id` in `wrangler.jsonc` (plus the `vars` block, if you added one for Cloudflare Access: see "Upgrading from v1.1"). If the template *has* changed `package.json` or `wrangler.jsonc`, take its version (`--theirs`) and put your values back by hand instead. **Check the result before you push:** `git diff template/main` must show nothing except those values, and `git diff origin/main HEAD -- wrangler.jsonc package.json migrations` must show no change to your names or database id. After this merge commit the two histories are joined, so later updates are the plain `git merge template/main`, and conflicts are only possible on lines both sides changed.
+
+   Then `git push`. The migrations run on every deploy (the `deploy` script applies them), so pushing a merge that adds a migration applies it. A push redeploys your Worker automatically: the button's form says "Every push to your production branch will be deployed automatically". Tip: check the Deployments tab on the Worker's page in the dashboard after your first push. To deploy without pushing, run `npm run deploy` from your clone. I tried this merge in a local clone of `club-slots` and checked the result against the template; I have not yet seen the push redeploy that copy.
 2. **Deploy a fresh copy** with the button and move the data across, as in [handover.md](handover.md). More work, but it starts clean.
 
 Apply all migrations before running new code that needs them. For instance `0011_site_icons` adds the `site_icons` table: without it Settings, saving or removing the logo and uploading icons return errors, while public pages fall back to the default icons.
