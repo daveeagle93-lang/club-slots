@@ -44,6 +44,7 @@ function stagedAt(dir: string): StagedDb {
   const persist = join(dir, "state");
   let proxy: Awaited<ReturnType<typeof getPlatformProxy<{ DB: D1Database }>>> | null = null;
   const open = async () => {
+    process.env.WRANGLER_REGISTRY_PATH = join(dir, "registry"); // see createTestEnv in db.ts
     proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath, persist: { path: join(persist, "v3") } });
   };
   const close = async () => { await proxy?.dispose(); proxy = null; };

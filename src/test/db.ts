@@ -16,6 +16,10 @@ export interface TestEnv {
 export async function createTestEnv(): Promise<TestEnv> {
   const dir = mkdtempSync(join(tmpdir(), "slot-booker-test-"));
   cpSync(inject("templateDir"), dir, { recursive: true });
+  // Its own dev registry. By default every proxy registers the same Worker name in one shared directory
+  // (~/.wrangler/registry), and a test that fakes Date at a fixed day sees another process's real file time as ~30 days
+  // ahead: miniflare turns that into a retry timer too long for Node, which prints TimeoutOverflowWarning.
+  process.env.WRANGLER_REGISTRY_PATH = join(dir, "registry");
   const proxy = await getPlatformProxy<{ DB: D1Database }>({ persist: { path: join(dir, "v3") } });
   return {
     // Only the binding: vars from a developer's generated wrangler.json (npm run configure) must not leak into tests.
