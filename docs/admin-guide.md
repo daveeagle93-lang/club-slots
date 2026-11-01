@@ -86,9 +86,9 @@ To sign out yourself, go to the events page and tap "Sign out".
 
 If you saved your recovery code, you can make a new admin secret yourself:
 
-1. Add /recover to the end of your site's address and open it.
+1. On the sign-in page, tap "Lost your admin secret? Use your recovery code." (it is under the Sign in button, and it comes up again if a sign-in fails). Or add /recover to the end of your site's address and open it. If the sign-in page does not show that link, the site has no recovery code: see the "Not found" note below.
 2. Type or paste the recovery code and tap "Continue".
-3. The page shows a new admin secret and a new recovery code, once. Save both, as in "The first time" above. The old secret and the old recovery code stop working, and anyone signed in with the old secret is signed out.
+3. The page shows a new admin secret and a new recovery code, once. Save both, as in "The first time" above. The old secret and the old recovery code stop working, and anyone signed in with the old secret is signed out. If you remember the secret after all, "Back to sign in" is under the Continue button.
 
 After 5 wrong tries from the same place you see "Too many attempts. Try again in N minutes." (with a number in place of N). Wait that long and try again. If the page says "Not found", the site has no recovery code (a site set up on an earlier version has none), so ask whoever looks after the site's setup. If you lose the recovery code too, ask them as well: they can find the steps in [handover.md](handover.md#if-the-admin-secret-is-lost), section "If the admin secret is lost".
 

@@ -19,6 +19,7 @@ The Deploy to Cloudflare form no longer asks for any secret or variable. An orga
   - Unset, or `password`, defers to the stored mode.
   - The first admin sign-in through Access set in the environment "pins" the Access settings into D1 (`changed_by = 'import'`).
   - To leave Access, use `/recover` or the documented SQL statement.
+- The admin sign-in page links to recovery: "Lost your admin secret? Use your recovery code." under the Sign in button, and again in the error after a wrong secret or too many attempts. The link only appears when `/recover` exists (a site made on v1.1 has no recovery code). `/recover` has a "Back to sign in" link.
 - `GET /api/admin/session` now returns `storedMode` (`access`, `password` or `null`) next to `identity`, `provider` and `csrfToken`.
 
 ### Changed

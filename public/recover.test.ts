@@ -287,3 +287,15 @@ describe("trimming", () => {
     expect(js).toMatch(/const code = trimAdminSecret\(field\.value\);/);
   });
 });
+
+describe("way back to sign-in", () => {
+  it("is a plain link inside the form, so it goes away with the form once the new secret is shown", async () => {
+    const html = readFileSync("public/recover.html", "utf8");
+    expect(html).toMatch(/<p class="hint"><a href="\/admin\/login">Back to sign in<\/a><\/p>\s*<\/form>/);
+    await start();
+    const link = $('#recover-form a[href="/admin/login"]');
+    expect(link.textContent).toBe("Back to sign in");
+    await submitOk();
+    expect($("#recover-form").hidden).toBe(true);
+  });
+});
