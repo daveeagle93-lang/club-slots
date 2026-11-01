@@ -10,18 +10,28 @@ const SIGNED_OUT = () => reply(401, { error: { code: "unauthenticated" }, provid
 
 type Call = { url: string; init?: RequestInit };
 
-/** Loads the real login.html body, then starts the page with a scripted fetch. */
-async function start(handler: (call: Call) => Response | Promise<Response>) {
+/**
+ * Loads the real login.html body, then starts the page with a scripted fetch. The page also asks whether /recover exists
+ * (a HEAD request): that is answered here, by `recover` (a status, or "network" for a failed request, 404 unless a test says
+ * otherwise), and kept out of `calls` so the tests of the session check and the sign-in POST see only their own requests.
+ */
+async function start(handler: (call: Call) => Response | Promise<Response>, { recover = 404 }: { recover?: number | "network" } = {}) {
   const html = readFileSync("public/admin/login.html", "utf8");
   document.body.innerHTML = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>")).replace(/<script[\s\S]*?<\/script>/g, "");
   const calls: Call[] = [];
+  const recoverCalls: Call[] = [];
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === "/recover") {
+      recoverCalls.push({ url, init });
+      if (recover === "network") throw new TypeError("Failed to fetch");
+      return new Response(null, { status: recover });
+    }
     calls.push({ url, init });
     return handler({ url, init });
   });
   const location = { assign: vi.fn() };
   await init({ document, fetch: fetch as unknown as typeof globalThis.fetch, location });
-  return { calls, location };
+  return { calls, recoverCalls, location };
 }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -202,5 +212,86 @@ describe("login page", () => {
   it("still shows the form if the session check itself fails", async () => {
     await start(() => { throw new TypeError("offline"); });
     expect($("#login-form").hidden).toBe(false);
+  });
+});
+
+// /recover is a plain 404 unless a recovery code is stored (a site made on v1.1 has none), so the page only offers the link
+// when a HEAD request to /recover says it exists, rather than sending an admin to "Not found".
+describe("recovery link", () => {
+  const TEXT = "Lost your admin secret? Use your recovery code.";
+  const hint = () => $("#recover-hint");
+  const link = (within: Element | null) => within?.querySelector<HTMLAnchorElement>('a[href="/recover"]') ?? null;
+  const wrong = () => reply(401, { error: { code: "invalid_credentials" } });
+  /** Signed out; the sign-in POST answers `login`. */
+  const signedOut = (login: () => Response = wrong) => (call: Call) => (call.url === "/api/admin/session" ? SIGNED_OUT() : login());
+
+  it("is in the sign-in page, hidden until the page knows /recover exists", () => {
+    const html = readFileSync("public/admin/login.html", "utf8");
+    expect(html).toMatch(/<p id="recover-hint"[^>]*\shidden[^>]*><a href="\/recover">Lost your admin secret\? Use your recovery code\.<\/a><\/p>/);
+  });
+
+  it("shows the link under the form when /recover is there, asking with HEAD and without the cache", async () => {
+    const { recoverCalls } = await start(signedOut(), { recover: 200 });
+    expect(recoverCalls).toHaveLength(1);
+    expect(recoverCalls[0].init?.method).toBe("HEAD");
+    expect(recoverCalls[0].init?.cache).toBe("no-store");
+    expect(hint().hidden).toBe(false);
+    expect(link(hint())?.textContent).toBe(TEXT);
+    expect($("#login-form").hidden).toBe(false);
+  });
+
+  it("keeps the link hidden when the site has no recovery code (/recover answers 404)", async () => {
+    await start(signedOut(), { recover: 404 });
+    expect(hint().hidden).toBe(true);
+    expect($("#login-form").hidden).toBe(false);
+  });
+
+  it("keeps the link hidden, and still shows the form, if the check fails", async () => {
+    await start(signedOut(), { recover: "network" });
+    expect(hint().hidden).toBe(true);
+    expect($("#login-form").hidden).toBe(false);
+  });
+
+  it("does not ask when there is no password form to sign in with", async () => {
+    const { recoverCalls } = await start(() => reply(401, { error: { code: "unauthenticated" }, provider: "access" }), { recover: 200 });
+    expect(recoverCalls).toHaveLength(0);
+    expect(hint().hidden).toBe(true);
+  });
+
+  it("offers it again in the error after a wrong secret", async () => {
+    await start(signedOut(), { recover: 200 });
+    await submit("not the secret");
+    expect(error().textContent).toBe(`That admin secret isn't right. ${TEXT}`);
+    expect(link(error())?.textContent).toBe(TEXT);
+  });
+
+  it("offers it again in the error after too many attempts", async () => {
+    await start(signedOut(() => reply(429, { error: { code: "too_many_attempts" } }, { "Retry-After": "800" })), { recover: 200 });
+    await submit("anything at all here");
+    expect(error().textContent).toBe(`Too many attempts. Try again in 14 minutes. ${TEXT}`);
+    expect(link(error())).not.toBeNull();
+  });
+
+  it("does not put it in the error when the site has no recovery code", async () => {
+    await start(signedOut(), { recover: 404 });
+    await submit("not the secret");
+    expect(error().textContent).toBe("That admin secret isn't right.");
+    expect(link(error())).toBeNull();
+  });
+
+  it("does not put it in a server-error message, which a recovery code would not fix", async () => {
+    await start(signedOut(() => reply(500)), { recover: 200 });
+    await submit("anything at all here");
+    expect(error().textContent).toBe("Something went wrong. Please try again.");
+    expect(link(error())).toBeNull();
+  });
+
+  it("clears the link from the error when the next attempt starts", async () => {
+    let first = true;
+    await start(signedOut(() => { const r = first ? wrong() : reply(500); first = false; return r; }), { recover: 200 });
+    await submit("first");
+    expect(link(error())).not.toBeNull();
+    await submit("second");
+    expect(link(error())).toBeNull();
   });
 });
